@@ -170,7 +170,6 @@ libbitcoin_server_a_SOURCES = \
   chain.cpp \
   checkpoints.cpp \
   init.cpp \
-  leveldbwrapper.cpp \
   main.cpp \
   miner.cpp \
   net.cpp \
@@ -242,6 +241,7 @@ libbitcoin_common_a_SOURCES = \
   hash.cpp \
   key.cpp \
   keystore.cpp \
+  leveldbwrapper.cpp \
   names.cpp \
   netbase.cpp \
   protocol.cpp \
@@ -334,6 +334,8 @@ namecoin_tx_LDADD = \
   $(LIBBITCOIN_CRYPTO) \
   $(LIBSECP256K1) \
   $(BOOST_LIBS) \
+  $(LIBLEVELDB) \
+  $(LIBMEMENV)
   $(CRYPTO_LIBS)
 
 namecoin_tx_SOURCES = bitcoin-tx.cpp

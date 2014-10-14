@@ -43,7 +43,11 @@ uint256 CCoinsViewDB::GetBestBlock() const {
     return hashBestChain;
 }
 
-bool CCoinsViewDB::BatchWrite(CCoinsMap &mapCoins, const uint256 &hashBlock) {
+bool CCoinsViewDB::GetName(const valtype &name, CNameData& data) const {
+    return db.Read(std::make_pair('n', name), data);
+}
+
+bool CCoinsViewDB::BatchWrite(CCoinsMap &mapCoins, const uint256 &hashBlock, const CNameCache &names) {
     CLevelDBBatch batch;
     size_t count = 0;
     size_t changed = 0;
@@ -58,6 +62,8 @@ bool CCoinsViewDB::BatchWrite(CCoinsMap &mapCoins, const uint256 &hashBlock) {
     }
     if (hashBlock != uint256(0))
         BatchWriteHashBestChain(batch, hashBlock);
+
+    names.writeBatch(batch);
 
     LogPrint("coindb", "Committing %u changed transactions (out of %u) to coin database...\n", (unsigned int)changed, (unsigned int)count);
     return db.WriteBatch(batch);
