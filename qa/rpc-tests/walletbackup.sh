@@ -40,8 +40,8 @@ if [ $# -lt 1 ]; then
         exit 1
 fi
 
-BITCOIND=${BITCOIND:-${1}/bitcoind}
-CLI=${BITCOINCLI:-${1}/bitcoin-cli}
+BITCOIND=${BITCOIND:-${1}/namecoind}
+CLI=${BITCOINCLI:-${1}/namecoin-cli}
 
 DIR="${BASH_SOURCE%/*}"
 SENDANDWAIT="${DIR}/send.sh"
@@ -65,7 +65,7 @@ B4PID=$!
 function CreateConfDir {
   DIR=$1
   mkdir -p $DIR
-  CONF=$DIR/bitcoin.conf
+  CONF=$DIR/namecoin.conf
   echo "regtest=1" >> $CONF
   echo "rpcuser=rt" >> $CONF
   echo "rpcpassword=rt" >> $CONF
