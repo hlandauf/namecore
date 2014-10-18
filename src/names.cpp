@@ -138,6 +138,25 @@ CNameCache::writeBatch (CLevelDBBatch& batch) const
 }
 
 /* ************************************************************************** */
+/* CNameTxUndo.  */
+
+void
+CNameTxUndo::fromOldState (const valtype& nm, const CCoinsView& view)
+{
+  name = nm;
+  isNew = !view.GetName (name, oldData);
+}
+
+void
+CNameTxUndo::apply (CCoinsViewCache& view) const
+{
+  if (isNew)
+    view.DeleteName (name);
+  else
+    view.SetName (name, oldData);
+}
+
+/* ************************************************************************** */
 
 bool
 CheckNameTransaction (const CTransaction& tx, unsigned nHeight,
@@ -297,7 +316,7 @@ CheckNameTransaction (const CTransaction& tx, unsigned nHeight,
 
 void
 ApplyNameTransaction (const CTransaction& tx, unsigned nHeight,
-                      CCoinsViewCache& view)
+                      CCoinsViewCache& view, CBlockUndo& undo)
 {
   assert (nHeight != MEMPOOL_HEIGHT);
   if (!tx.IsNamecoin ())
@@ -314,6 +333,10 @@ ApplyNameTransaction (const CTransaction& tx, unsigned nHeight,
           const valtype& name = op.getOpName ();
           LogPrintf ("Updating name at height %d: %s\n",
                      nHeight, ValtypeToString (name).c_str ());
+
+          CNameTxUndo opUndo;
+          opUndo.fromOldState (name, view);
+          undo.vnameundo.push_back (opUndo);
 
           CNameData data;
           data.fromScript (nHeight, op);
