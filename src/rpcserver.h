@@ -227,4 +227,6 @@ extern bool HTTPReq_REST(AcceptedConnection *conn,
                   std::map<std::string, std::string>& mapHeaders,
                   bool fRun);
 
-#endif // BITCOIN_RPCSERVER_H
+extern json_spirit::Value name_show(const json_spirit::Array& params, bool fHelp);
+
+#endif // BITCOINRPC_SERVER_H
