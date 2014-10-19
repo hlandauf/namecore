@@ -9,6 +9,7 @@
 #include "checkpoints.h"
 #include "coincontrol.h"
 #include "net.h"
+#include "script/names.h"
 #include "script/script.h"
 #include "script/sign.h"
 #include "timedata.h"
@@ -1362,6 +1363,7 @@ bool CWallet::CreateTransaction(const vector<pair<CScript, CAmount> >& vecSend,
                                 CWalletTx& wtxNew, CReserveKey& reservekey, CAmount& nFeeRet, std::string& strFailReason, const CCoinControl* coinControl)
 {
     CAmount nValue = 0;
+    bool isNamecoin = false;
     BOOST_FOREACH (const PAIRTYPE(CScript, CAmount)& s, vecSend)
     {
         if (nValue < 0)
@@ -1370,6 +1372,10 @@ bool CWallet::CreateTransaction(const vector<pair<CScript, CAmount> >& vecSend,
             return false;
         }
         nValue += s.second;
+
+        const CNameScript nameOp(s.first);
+        if (nameOp.isNameOp ())
+          isNamecoin = true;
     }
     if (vecSend.empty() || nValue < 0)
     {
@@ -1380,6 +1386,9 @@ bool CWallet::CreateTransaction(const vector<pair<CScript, CAmount> >& vecSend,
     wtxNew.fTimeReceivedIsTxTime = true;
     wtxNew.BindWallet(this);
     CMutableTransaction txNew;
+
+    if (isNamecoin)
+        txNew.SetNamecoin();
 
     {
         LOCK2(cs_main, cs_wallet);
@@ -1591,6 +1600,14 @@ bool CWallet::CommitTransaction(CWalletTx& wtxNew, CReserveKey& reservekey)
 
 string CWallet::SendMoney(const CTxDestination &address, CAmount nValue, CWalletTx& wtxNew)
 {
+    // Parse Bitcoin address
+    CScript scriptPubKey = GetScriptForDestination(address);
+
+    return SendMoneyToScript(scriptPubKey, nValue, wtxNew);
+}
+
+string CWallet::SendMoneyToScript(const CScript& scriptPubKey, CAmount nValue, CWalletTx& wtxNew)
+{
     // Check amount
     if (nValue <= 0)
         return _("Invalid amount");
@@ -1604,9 +1621,6 @@ string CWallet::SendMoney(const CTxDestination &address, CAmount nValue, CWallet
         LogPrintf("SendMoney() : %s", strError);
         return strError;
     }
-
-    // Parse Bitcoin address
-    CScript scriptPubKey = GetScriptForDestination(address);
 
     // Create and send the transaction
     CReserveKey reservekey(this);
