@@ -9,6 +9,7 @@
 #include "checkpoints.h"
 #include "coincontrol.h"
 #include "net.h"
+#include "script/names.h"
 #include "script/script.h"
 #include "script/sign.h"
 #include "timedata.h"
@@ -1363,6 +1364,7 @@ bool CWallet::CreateTransaction(const vector<pair<CScript, CAmount> >& vecSend,
                                 CWalletTx& wtxNew, CReserveKey& reservekey, CAmount& nFeeRet, std::string& strFailReason, const CCoinControl* coinControl)
 {
     CAmount nValue = 0;
+    bool isNamecoin = false;
     BOOST_FOREACH (const PAIRTYPE(CScript, CAmount)& s, vecSend)
     {
         if (nValue < 0)
@@ -1371,6 +1373,10 @@ bool CWallet::CreateTransaction(const vector<pair<CScript, CAmount> >& vecSend,
             return false;
         }
         nValue += s.second;
+
+        const CNameScript nameOp(s.first);
+        if (nameOp.isNameOp ())
+          isNamecoin = true;
     }
     if (vecSend.empty() || nValue < 0)
     {
@@ -1381,6 +1387,8 @@ bool CWallet::CreateTransaction(const vector<pair<CScript, CAmount> >& vecSend,
     wtxNew.fTimeReceivedIsTxTime = true;
     wtxNew.BindWallet(this);
     CMutableTransaction txNew;
+    if (isNamecoin)
+        txNew.SetNamecoin();
 
     // Discourage fee sniping.
     //
