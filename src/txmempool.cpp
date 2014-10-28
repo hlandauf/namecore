@@ -11,12 +11,15 @@
 #include "utilmoneystr.h"
 #include "version.h"
 
+#include "script/names.h"
+
 #include <boost/circular_buffer.hpp>
 
 using namespace std;
 
 CTxMemPoolEntry::CTxMemPoolEntry():
-    nFee(0), nTxSize(0), nModSize(0), nTime(0), dPriority(0.0)
+    nFee(0), nTxSize(0), nModSize(0), nTime(0), dPriority(0.0),
+    isNameReg(false)
 {
     nHeight = MEMPOOL_HEIGHT;
 }
@@ -24,11 +27,26 @@ CTxMemPoolEntry::CTxMemPoolEntry():
 CTxMemPoolEntry::CTxMemPoolEntry(const CTransaction& _tx, const CAmount& _nFee,
                                  int64_t _nTime, double _dPriority,
                                  unsigned int _nHeight):
-    tx(_tx), nFee(_nFee), nTime(_nTime), dPriority(_dPriority), nHeight(_nHeight)
+    tx(_tx), nFee(_nFee), nTime(_nTime), dPriority(_dPriority), nHeight(_nHeight),
+    isNameReg(false)
 {
     nTxSize = ::GetSerializeSize(tx, SER_NETWORK, PROTOCOL_VERSION);
 
     nModSize = tx.CalculateModifiedSize(nTxSize);
+
+    if (tx.IsNamecoin())
+    {
+        BOOST_FOREACH(const CTxOut& txout, tx.vout)
+        {
+            const CNameScript nameOp(txout.scriptPubKey);
+            if (nameOp.isNameOp() && nameOp.getNameOp() == OP_NAME_FIRSTUPDATE)
+            {
+                assert(!isNameReg);
+                isNameReg = true;
+                name = nameOp.getOpName();
+            }
+        }
+    }
 }
 
 CTxMemPoolEntry::CTxMemPoolEntry(const CTxMemPoolEntry& other)
@@ -362,7 +380,8 @@ public:
 
 CTxMemPool::CTxMemPool(const CFeeRate& _minRelayFee) :
     nTransactionsUpdated(0),
-    minRelayFee(_minRelayFee)
+    minRelayFee(_minRelayFee),
+    names(*this)
 {
     // Sanity checks off by default for performance, because otherwise
     // accepting transactions becomes O(N^2) where N is the number
@@ -421,6 +440,8 @@ bool CTxMemPool::addUnchecked(const uint256& hash, const CTxMemPoolEntry &entry)
             mapNextTx[tx.vin[i].prevout] = CInPoint(&tx, i);
         nTransactionsUpdated++;
         totalTxSize += entry.GetTxSize();
+
+        names.addUnchecked (hash, entry);
     }
     return true;
 }
@@ -442,11 +463,14 @@ void CTxMemPool::remove(const CTransaction &tx, std::list<CTransaction>& removed
         }
         if (mapTx.count(hash))
         {
+            const CTxMemPoolEntry& entry = mapTx[hash];
+            names.remove (entry);
+
             removed.push_front(tx);
             BOOST_FOREACH(const CTxIn& txin, tx.vin)
                 mapNextTx.erase(txin.prevout);
 
-            totalTxSize -= mapTx[hash].GetTxSize();
+            totalTxSize -= entry.GetTxSize();
             mapTx.erase(hash);
             nTransactionsUpdated++;
         }
@@ -468,6 +492,9 @@ void CTxMemPool::removeConflicts(const CTransaction &tx, std::list<CTransaction>
             }
         }
     }
+
+    /* Remove conflicting name registrations.  */
+    names.removeConflicts (tx, removed);
 }
 
 /**
@@ -500,6 +527,7 @@ void CTxMemPool::clear()
     LOCK(cs);
     mapTx.clear();
     mapNextTx.clear();
+    names.clear();
     totalTxSize = 0;
     ++nTransactionsUpdated;
 }
@@ -547,6 +575,8 @@ void CTxMemPool::check(const CCoinsViewCache *pcoins) const
     }
 
     assert(totalTxSize == checkTotal);
+
+    names.check (*pcoins);
 }
 
 void CTxMemPool::queryHashes(vector<uint256>& vtxid)
