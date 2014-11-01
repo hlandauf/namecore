@@ -29,12 +29,25 @@ class BitcoinTestFramework(object):
     def add_options(self, parser):
         pass
 
+    def getExtraArgs(self, n):
+        """
+        Provide extra args to pass to node n when starting it.  None by
+        default, but can be overridden in a subclass to build a
+        custom-configured network.
+        """
+
+        return None
+
     def setup_chain(self):
         print("Initializing test directory "+self.options.tmpdir)
         initialize_chain(self.options.tmpdir)
 
     def setup_network(self, split = False):
-        self.nodes = start_nodes(4, self.options.tmpdir)
+        numNodes = 4
+        extraArgs = []
+        for i in range(numNodes):
+            extraArgs.append(self.getExtraArgs(i))
+        self.nodes = start_nodes(numNodes, self.options.tmpdir, extraArgs)
 
         # Connect the nodes as a "chain".  This allows us
         # to split the network between nodes 1 and 2 to get
