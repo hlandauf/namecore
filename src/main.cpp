@@ -1625,6 +1625,10 @@ bool DisconnectBlock(CBlock& block, CValidationState& state, CBlockIndex* pindex
          nameUndoIter != blockUndo.vnameundo.rend (); ++nameUndoIter)
       nameUndoIter->apply (view);
 
+    // undo name expirations
+    if (!UnexpireNames (pindex->nHeight, blockUndo, view))
+      fClean = false;
+
     // move best block pointer to prevout block
     view.SetBestBlock(pindex->pprev->GetBlockHash());
 
@@ -1725,6 +1729,11 @@ bool ConnectBlock(CBlock& block, CValidationState& state, CBlockIndex* pindex, C
     unsigned int flags = fStrictPayToScriptHash ? SCRIPT_VERIFY_P2SH : SCRIPT_VERIFY_NONE;
 
     CBlockUndo blockundo;
+
+    /* Remove expired names from the UTXO set.  They become permanently
+       unspendable.  */
+    if (!ExpireNames(pindex->nHeight, view, blockundo))
+        return error("%s : ExpireNames failed", __func__);
 
     CCheckQueueControl<CScriptCheck> control(fScriptChecks && nScriptCheckThreads ? &scriptcheckqueue : NULL);
 

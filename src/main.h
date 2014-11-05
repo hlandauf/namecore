@@ -303,7 +303,11 @@ class CBlockUndo
 {
 public:
     std::vector<CTxUndo> vtxundo; // for all but the coinbase
-    std::vector<CNameTxUndo> vnameundo; // stack of operations (as necessary)
+
+    /** Stack of operations done to the name database.  */
+    std::vector<CNameTxUndo> vnameundo;
+    /** Undo information for expired name coins.  */
+    std::vector<CTxInUndo> vexpired;
 
     ADD_SERIALIZE_METHODS;
 
@@ -311,6 +315,7 @@ public:
     inline void SerializationOp(Stream& s, Operation ser_action, int nType, int nVersion) {
         READWRITE(vtxundo);
         READWRITE(vnameundo);
+        READWRITE(vexpired);
     }
 
     bool WriteToDisk(CDiskBlockPos &pos, const uint256 &hashBlock);
@@ -454,6 +459,8 @@ bool ReadBlockHeaderFromDisk(CBlockHeader& block, const CBlockIndex* pindex);
 
 
 /** Functions for validating blocks and updating the block tree */
+
+bool ApplyTxInUndo(const CTxInUndo& undo, CCoinsViewCache& view, const COutPoint& out);
 
 /** Undo the effects of this block (with given index) on the UTXO set represented by coins.
  *  In case pfClean is provided, operation will try to be tolerant about errors, and *pfClean
