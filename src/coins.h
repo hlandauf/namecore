@@ -322,6 +322,9 @@ public:
     // Query for names that were updated at the given height
     virtual bool GetNamesForHeight(unsigned nHeight, std::set<valtype>& names) const;
 
+    // Walk over the name database.
+    virtual void WalkNames(const valtype& start, CNameWalker& walker) const;
+
     // Do a bulk modification (multiple CCoins changes + BestBlock change
     // + name updates).
     // The passed mapCoins can be modified.
@@ -351,6 +354,7 @@ public:
     uint256 GetBestBlock() const;
     bool GetName(const valtype& name, CNameData& data) const;
     bool GetNamesForHeight(unsigned nHeight, std::set<valtype>& names) const;
+    void WalkNames(const valtype& start, CNameWalker& walker) const;
     void SetBackend(CCoinsView &viewIn);
     bool BatchWrite(CCoinsMap &mapCoins, const uint256 &hashBlock, const CNameCache &names);
     bool GetStats(CCoinsStats &stats) const;
@@ -403,6 +407,7 @@ public:
     void SetBestBlock(const uint256 &hashBlock);
     bool GetName(const valtype &name, CNameData &data) const;
     bool GetNamesForHeight(unsigned nHeight, std::set<valtype>& names) const;
+    void WalkNames(const valtype& start, CNameWalker& walker) const;
     bool BatchWrite(CCoinsMap &mapCoins, const uint256 &hashBlock, const CNameCache &names);
 
     /* Changes to the name database.  */
