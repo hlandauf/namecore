@@ -49,6 +49,11 @@ bool CCoinsViewDB::GetName(const valtype &name, CNameData& data) const {
     return db.Read(std::make_pair('n', name), data);
 }
 
+bool CCoinsViewDB::GetNameHistory(const valtype &name, CNameHistory& data) const {
+    assert (fNameHistory);
+    return db.Read(std::make_pair('h', name), data);
+}
+
 bool CCoinsViewDB::GetNamesForHeight(unsigned nHeight, std::set<valtype>& names) const {
     names.clear();
 
@@ -274,6 +279,7 @@ bool CCoinsViewDB::ValidateNameDB() const
     std::map<valtype, unsigned> nameHeightsData;
     std::set<valtype> namesInDB;
     std::set<valtype> namesInUTXO;
+    std::set<valtype> namesWithHistory;
 
     while (pcursor->Valid())
     {
@@ -329,6 +335,18 @@ bool CCoinsViewDB::ValidateNameDB() const
                 break;
             }
 
+            case 'h':
+            {
+                valtype name;
+                ssKey >> name;
+
+                if (namesWithHistory.count(name) > 0)
+                    return error("%s : name %s has duplicate history",
+                                 __func__, ValtypeToString(name).c_str());
+                namesWithHistory.insert(name);
+                break;
+            }
+
             case 'x':
             {
                 CNameCache::ExpireEntry entry;
@@ -365,8 +383,19 @@ bool CCoinsViewDB::ValidateNameDB() const
     if (namesInDB != namesInUTXO)
         return error("%s : names in UTXO mismatch names in the DB", __func__);
 
-    LogPrintf("Checked name database, %d unexpired names, %d total.\n",
+    if (fNameHistory)
+    {
+        BOOST_FOREACH(const valtype& name, namesWithHistory)
+            if (nameHeightsData.count(name) == 0)
+                return error("%s : history entry for name '%s' not in main DB",
+                             __func__, ValtypeToString(name).c_str());
+    } else if (!namesWithHistory.empty ())
+        return error("%s : name_history entries in DB, but"
+                     " -namehistory not set", __func__);
+
+    LogPrintf("Checked name database, %u unexpired names, %u total.\n",
               namesInDB.size(), nameHeightsData.size());
+    LogPrintf("Names with history: %u\n", namesWithHistory.size());
 
     return true;
 }
