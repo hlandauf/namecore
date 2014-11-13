@@ -181,6 +181,11 @@ public:
     {
         return data;
     }
+
+    int AuxpowStartHeight() const
+    {
+        return 19200;
+    }
 };
 static CMainParams mainParams;
 
@@ -242,6 +247,11 @@ public:
     const Checkpoints::CCheckpointData& Checkpoints() const 
     {
         return dataTestnet;
+    }
+
+    int AuxpowStartHeight() const
+    {
+        return 0;
     }
 };
 static CTestNetParams testNetParams;
