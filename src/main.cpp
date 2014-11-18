@@ -1126,7 +1126,7 @@ bool CheckProofOfWork(const CBlockHeader& block)
        the chain ID is correct.  Legacy blocks are not allowed since
        the merge-mining start, which is checked in AcceptBlockHeader
        where the height is known.  */
-    if (!block.nVersion.IsLegacy()
+    if (!block.nVersion.IsLegacy() && Params().StrictChainId()
         && block.nVersion.GetChainId() != Params().AuxpowChainId())
         return error("%s : block does not have our chain ID", __func__);
 
@@ -2435,7 +2435,7 @@ bool AcceptBlockHeader(const CBlockHeader& block, CValidationState& state, CBloc
         nHeight = pindexPrev->nHeight+1;
 
         // Disallow legacy blocks after merge-mining start.
-        if (nHeight >= Params().AuxpowStartHeight()
+        if (!Params().AllowLegacyBlocks(nHeight)
             && block.nVersion.IsLegacy())
             return state.DoS(100, error("%s : legacy block after auxpow start",
                                         __func__),
