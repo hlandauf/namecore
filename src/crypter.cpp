@@ -122,6 +122,28 @@ bool DecryptSecret(const CKeyingMaterial& vMasterKey, const std::vector<unsigned
     return cKeyCrypter.Decrypt(vchCiphertext, *((CKeyingMaterial*)&vchPlaintext));
 }
 
+/* The old namecoind encrypted not the 32-byte secret, but the full 279-byte
+   serialised keys.  Thus, we need to handle both formats.  This is done
+   by the following utility routine:  It decrypts a secret and initialises
+   a CKey object from it.  */
+static bool DecryptKey(const CKeyingMaterial& vMasterKey, const std::vector<unsigned char>& vchCryptedSecret, const CPubKey& vchPubKey, CKey& key)
+{
+    CKeyingMaterial vchSecret;
+    if(!DecryptSecret(vMasterKey, vchCryptedSecret, vchPubKey.GetHash(), vchSecret))
+        return false;
+
+    if (fDebug)
+        LogPrintf("%s : decrypted %u-byte key\n", __func__, vchSecret.size());
+
+    if (vchSecret.size() == 32)
+    {
+        key.Set(vchSecret.begin(), vchSecret.end(), vchPubKey.IsCompressed());
+        return true;
+    }
+
+    return key.SetPrivKey(vchSecret, vchPubKey.IsCompressed());
+}
+
 bool CCryptoKeyStore::SetCrypted()
 {
     LOCK(cs_KeyStore);
@@ -161,19 +183,12 @@ bool CCryptoKeyStore::Unlock(const CKeyingMaterial& vMasterKeyIn)
         {
             const CPubKey &vchPubKey = (*mi).second.first;
             const std::vector<unsigned char> &vchCryptedSecret = (*mi).second.second;
-            CKeyingMaterial vchSecret;
-            if(!DecryptSecret(vMasterKeyIn, vchCryptedSecret, vchPubKey.GetHash(), vchSecret))
-            {
-                keyFail = true;
-                break;
-            }
-            if (vchSecret.size() != 32)
-            {
-                keyFail = true;
-                break;
-            }
             CKey key;
-            key.Set(vchSecret.begin(), vchSecret.end(), vchPubKey.IsCompressed());
+            if (!DecryptKey(vMasterKeyIn, vchCryptedSecret, vchPubKey, key))
+            {
+                keyFail = true;
+                break;
+            }
             if (key.GetPubKey() != vchPubKey)
             {
                 keyFail = true;
@@ -243,13 +258,7 @@ bool CCryptoKeyStore::GetKey(const CKeyID &address, CKey& keyOut) const
         {
             const CPubKey &vchPubKey = (*mi).second.first;
             const std::vector<unsigned char> &vchCryptedSecret = (*mi).second.second;
-            CKeyingMaterial vchSecret;
-            if (!DecryptSecret(vMasterKey, vchCryptedSecret, vchPubKey.GetHash(), vchSecret))
-                return false;
-            if (vchSecret.size() != 32)
-                return false;
-            keyOut.Set(vchSecret.begin(), vchSecret.end(), vchPubKey.IsCompressed());
-            return true;
+            return DecryptKey(vMasterKey, vchCryptedSecret, vchPubKey, keyOut);
         }
     }
     return false;
