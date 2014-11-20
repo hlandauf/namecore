@@ -187,11 +187,10 @@ public:
         //vSeeds.push_back(CDNSSeedData("bitcoin.sipa.be", "seed.bitcoin.sipa.be"));
 
         base58Prefixes[PUBKEY_ADDRESS] = boost::assign::list_of(52);
-        /* FIXME: What are these below?  */
-        base58Prefixes[SCRIPT_ADDRESS] = boost::assign::list_of(5);
-        base58Prefixes[SECRET_KEY] =     boost::assign::list_of(128);
-        base58Prefixes[EXT_PUBLIC_KEY] = boost::assign::list_of(0x04)(0x88)(0xB2)(0x1E);
-        base58Prefixes[EXT_SECRET_KEY] = boost::assign::list_of(0x04)(0x88)(0xAD)(0xE4);
+        base58Prefixes[SCRIPT_ADDRESS] = boost::assign::list_of(5); // FIXME: Update
+        base58Prefixes[SECRET_KEY] =     boost::assign::list_of(180);
+        //base58Prefixes[EXT_PUBLIC_KEY] = boost::assign::list_of(0x04)(0x88)(0xB2)(0x1E);
+        //base58Prefixes[EXT_SECRET_KEY] = boost::assign::list_of(0x04)(0x88)(0xAD)(0xE4);
 
         /* FIXME: fixed seeds?  */
         //convertSeed6(vFixedSeeds, pnSeed6_main, ARRAYLEN(pnSeed6_main));
@@ -322,11 +321,10 @@ public:
         //vSeeds.push_back(CDNSSeedData("bitcoin.schildbach.de", "testnet-seed.bitcoin.schildbach.de"));
 
         base58Prefixes[PUBKEY_ADDRESS] = boost::assign::list_of(111);
-        /* FIXME: What are these below?  */
         base58Prefixes[SCRIPT_ADDRESS] = boost::assign::list_of(196);
         base58Prefixes[SECRET_KEY]     = boost::assign::list_of(239);
-        base58Prefixes[EXT_PUBLIC_KEY] = boost::assign::list_of(0x04)(0x35)(0x87)(0xCF);
-        base58Prefixes[EXT_SECRET_KEY] = boost::assign::list_of(0x04)(0x35)(0x83)(0x94);
+        //base58Prefixes[EXT_PUBLIC_KEY] = boost::assign::list_of(0x04)(0x35)(0x87)(0xCF);
+        //base58Prefixes[EXT_SECRET_KEY] = boost::assign::list_of(0x04)(0x35)(0x83)(0x94);
 
         /* FIXME: fixed seeds?  */
         //convertSeed6(vFixedSeeds, pnSeed6_test, ARRAYLEN(pnSeed6_test));
