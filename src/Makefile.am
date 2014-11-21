@@ -340,7 +340,7 @@ namecoin_tx_LDADD = \
   $(LIBSECP256K1) \
   $(BOOST_LIBS) \
   $(LIBLEVELDB) \
-  $(LIBMEMENV)
+  $(LIBMEMENV) \
   $(CRYPTO_LIBS)
 
 namecoin_tx_SOURCES = bitcoin-tx.cpp
