@@ -130,6 +130,7 @@ void Shutdown()
     mempool.AddTransactionsUpdated(1);
     StopRPCThreads();
 #ifdef ENABLE_WALLET
+    ShutdownRPCMining();
     if (pwalletMain)
         bitdb.Flush(false);
     GenerateBitcoins(false, NULL, 0);
@@ -1269,6 +1270,8 @@ bool AppInit2(boost::thread_group& threadGroup)
     // Generate coins in the background
     if (pwalletMain)
         GenerateBitcoins(GetBoolArg("-gen", false), pwalletMain, GetArg("-genproclimit", 1));
+
+    InitRPCMining ();
 #endif
 
     // ********************************************************* Step 11: finished
