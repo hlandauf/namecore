@@ -366,6 +366,132 @@ name_scan (const json_spirit::Array& params, bool fHelp)
   return walker.getArray ();
 }
 
+json_spirit::Value
+name_sync (const json_spirit::Array& params, bool fHelp)
+{
+  if (fHelp || params.size() < 2 || params.size() > 3)
+    throw std::runtime_error (
+        "name_sync \"block_hash\" \"count\" (\"wait\")\n"
+        "\nList events for synchronizing with a database\n"
+        "\nArguments:\n"
+        "1. \"block_hash\"    (string, required) hex-encoded block hash to start synchronization from\n"
+        "2. \"count\"         (integer, required) approximate number of events to return\n"
+        "3. \"wait\"          (boolean, optional) wait until there are events to return (default: false)\n"
+        "\nResult:\n"
+        "[\n"
+        "  [\"update\", \"d/example\", \"{}\"],\n"
+        "  [\"expire\", \"d/example2\"],\n"
+        "  [\"atblock\", \"blockhash...\", blockheight]\n"
+        "]\n"
+      );
+
+  bool wait = false;
+
+  std::string strHash = params[0].get_str();
+  uint256 hash(strHash);
+
+  int count = params[1].get_int();
+  if (count < 0)
+    return json_spirit::Array();
+
+  if (params.size() > 2)
+    wait = params[2].get_bool();
+
+  if (mapBlockIndex.count(hash) == 0)
+    throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Block not found");
+
+  CBlock block;
+  CBlockIndex* pblockindex = mapBlockIndex[hash];
+
+  if (!ReadBlockFromDisk(block, pblockindex))
+    throw JSONRPCError(RPC_INTERNAL_ERROR, "Can't read block from disk");
+
+  int height = pblockindex->nHeight;
+  int maxHeight = chainActive.Height();
+
+  if (wait && height == maxHeight) {
+    // Release the wallet and main lock while waiting
+#ifdef ENABLE_WALLET
+    if (pwalletMain)
+      LEAVE_CRITICAL_SECTION(pwalletMain->cs_wallet);
+#endif
+    LEAVE_CRITICAL_SECTION(cs_main);
+    {
+      boost::unique_lock<boost::mutex> lock(csBestBlock);
+      while (chainActive.Height() == maxHeight && IsRPCRunning()) {
+        cvBlockChange.wait(lock);
+      }
+
+      maxHeight = chainActive.Height();
+    }
+    ENTER_CRITICAL_SECTION(cs_main);
+#ifdef ENABLE_WALLET
+    if (pwalletMain)
+      ENTER_CRITICAL_SECTION(pwalletMain->cs_wallet);
+#endif
+
+    if (!IsRPCRunning())
+      throw JSONRPCError(RPC_CLIENT_NOT_CONNECTED, "Shutting down");
+  }
+
+  json_spirit::Array events;
+
+  int numEmitted = 0;
+
+  for (int curHeight=height+1; curHeight <= maxHeight; ++curHeight) {
+    if (numEmitted > count)
+      break;
+
+    pblockindex = chainActive[curHeight];
+
+    if (!ReadBlockFromDisk(block, pblockindex))
+      throw JSONRPCError(RPC_INTERNAL_ERROR, "Can't read block from disk");
+
+    bool emitted = false;
+
+    for (unsigned txIdx=0; txIdx<block.vtx.size(); ++txIdx) {
+      const CTransaction &tx = block.vtx[txIdx];
+      if (!tx.IsNamecoin())
+        continue;
+
+      for (unsigned outputIdx=0; outputIdx<tx.vout.size(); ++outputIdx) {
+        const CNameScript op(tx.vout[outputIdx].scriptPubKey);
+        if (op.isNameOp() && op.isAnyUpdate()) {
+          const valtype& name = op.getOpName();
+          const valtype& value = op.getOpValue();
+
+          json_spirit::Array ev;
+          ev.push_back((op.getNameOp() == OP_NAME_FIRSTUPDATE) ? "firstupdate" : "update");
+          ev.push_back(ValtypeToString(name));
+          ev.push_back(ValtypeToString(value));
+
+          events.push_back(ev);
+          emitted = true;
+          ++numEmitted;
+        }
+      }
+    }
+
+    // Always emit atblock when finishing (if we advanced through any blocks at
+    // all). We need to do this so that the client will always end up calling
+    // name_sync with the current block hash (after a number of calls), even if
+    // the last few blocks contain no name operations. That in turn is
+    // necessary for long polling to work, as long polling mode will only be
+    // entered when the client calls with the current block hash.
+    bool willTerminate = ((curHeight + 1) > maxHeight || numEmitted > count);
+    if (emitted || willTerminate) {
+      // emit atblock
+      json_spirit::Array atblock;
+      atblock.push_back("atblock");
+      atblock.push_back(pblockindex->GetBlockHash().GetHex());
+      atblock.push_back((uint64_t)curHeight);
+      events.push_back(atblock);
+    }
+  }
+
+  return events;
+}
+
 /* ************************************************************************** */
 
 /**
