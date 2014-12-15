@@ -24,6 +24,8 @@ class CBlockIndex;
 class CMutableTransaction;
 class CNameData;
 class CNetAddr;
+class CTxIn;
+class CWalletTx;
 
 class AcceptedConnection
 {
