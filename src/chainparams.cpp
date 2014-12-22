@@ -187,7 +187,7 @@ public:
         //vSeeds.push_back(CDNSSeedData("bitcoin.sipa.be", "seed.bitcoin.sipa.be"));
 
         base58Prefixes[PUBKEY_ADDRESS] = boost::assign::list_of(52);
-        base58Prefixes[SCRIPT_ADDRESS] = boost::assign::list_of(5); // FIXME: Update
+        base58Prefixes[SCRIPT_ADDRESS] = boost::assign::list_of(13);
         base58Prefixes[SECRET_KEY] =     boost::assign::list_of(180);
         //base58Prefixes[EXT_PUBLIC_KEY] = boost::assign::list_of(0x04)(0x88)(0xB2)(0x1E);
         //base58Prefixes[EXT_SECRET_KEY] = boost::assign::list_of(0x04)(0x88)(0xAD)(0xE4);
