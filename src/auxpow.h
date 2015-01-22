@@ -1,6 +1,6 @@
 // Copyright (c) 2009-2010 Satoshi Nakamoto
 // Copyright (c) 2009-2014 The Bitcoin developers
-// Copyright (c) 2014 Daniel Kraft
+// Copyright (c) 2014-2015 Daniel Kraft
 // Distributed under the MIT/X11 software license, see the accompanying
 // file license.txt or http://www.opensource.org/licenses/mit-license.php.
 
@@ -10,8 +10,8 @@
 #include "serialize.h"
 #include "uint256.h"
 
-#include "core/pureheader.h"
-#include "core/transaction.h"
+#include "primitives/pureheader.h"
+#include "primitives/transaction.h"
 
 #include <vector>
 
@@ -22,8 +22,7 @@ class CBlockIndex;
 static const unsigned char pchMergedMiningHeader[] = { 0xfa, 0xbe, 'm', 'm' };
 
 /* Because it is needed for auxpow, the definition of CMerkleTx is moved
-   here from wallet.h.  The implementations of the various methods are
-   not needed and stay in wallet.cpp.  */
+   here from wallet.h.  */
 
 /** A transaction with a merkle branch linking it to the block chain. */
 class CMerkleTx : public CTransaction
@@ -52,7 +51,7 @@ public:
 
     void Init()
     {
-        hashBlock = 0;
+        hashBlock = uint256();
         nIndex = -1;
         fMerkleVerified = false;
     }

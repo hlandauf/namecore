@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python2
 # Copyright (c) 2014 The Bitcoin Core developers
 # Distributed under the MIT software license, see the accompanying
 # file COPYING or http://www.opensource.org/licenses/mit-license.php.
@@ -55,11 +55,15 @@ class BitcoinTestFramework(object):
             extraArgs.append(self.getExtraArgs(i))
         initialize_chain(self.options.tmpdir, extraArgs)
 
-    def setup_network(self, split = False):
+    def setup_nodes(self):
+        numNodes = 4
         extraArgs = []
         for i in range(self.numNodes):
             extraArgs.append(self.getExtraArgs(i))
-        self.nodes = start_nodes(self.numNodes, self.options.tmpdir, extraArgs)
+        return start_nodes(numNodes, self.options.tmpdir, extraArgs)
+
+    def setup_network(self, split = False):
+        self.nodes = self.setup_nodes()
 
         # Connect the nodes as a "chain".  This allows us
         # to split the network between nodes 1 and 2 to get

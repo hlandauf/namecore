@@ -1,5 +1,5 @@
 // Copyright (c) 2010 Satoshi Nakamoto
-// Copyright (c) 2009-2014 The Bitcoin developers
+// Copyright (c) 2009-2014 The Bitcoin Core developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -26,7 +26,6 @@
 #include <boost/thread.hpp>
 #include "json/json_spirit_writer_template.h"
 
-using namespace boost;
 using namespace boost::asio;
 using namespace json_spirit;
 using namespace std;
@@ -39,7 +38,7 @@ static std::string rpcWarmupStatus("RPC server started");
 static CCriticalSection cs_rpcWarmup;
 
 //! These are created by StartRPCThreads, destroyed in StopRPCThreads
-static asio::io_service* rpc_io_service = NULL;
+static boost::asio::io_service* rpc_io_service = NULL;
 static map<string, boost::shared_ptr<deadline_timer> > deadlineTimers;
 static ssl::context* rpc_ssl_context = NULL;
 static boost::thread_group* rpc_worker_group = NULL;
@@ -160,7 +159,7 @@ string CRPCTable::help(string strCommand) const
         // We already filter duplicates, but these deprecated screw up the sort order
         if (strMethod.find("label") != string::npos)
             continue;
-        if (strCommand != "" && strMethod != strCommand)
+        if ((strCommand != "" || pcmd->category == "hidden") && strMethod != strCommand)
             continue;
 #ifdef ENABLE_WALLET
         if (pcmd->reqWallet && !pwalletMain)
@@ -174,7 +173,7 @@ string CRPCTable::help(string strCommand) const
             if (setDone.insert(pfn).second)
                 (*pfn)(params, true);
         }
-        catch (std::exception& e)
+        catch (const std::exception& e)
         {
             // Help text is returned in an exception
             string strHelp = string(e.what());
@@ -246,7 +245,6 @@ static const CRPCCommand vRPCCommands[] =
     { "control",            "getinfo",                &getinfo,                true,      false,      false }, /* uses wallet if enabled */
     { "control",            "help",                   &help,                   true,      true,       false },
     { "control",            "stop",                   &stop,                   true,      true,       false },
-    { "control",            "setmocktime",            &setmocktime,            true,      false,      false },
 
     /* P2P networking */
     { "network",            "getnetworkinfo",         &getnetworkinfo,         true,      false,      false },
@@ -270,6 +268,8 @@ static const CRPCCommand vRPCCommands[] =
     { "blockchain",         "gettxout",               &gettxout,               true,      false,      false },
     { "blockchain",         "gettxoutsetinfo",        &gettxoutsetinfo,        true,      false,      false },
     { "blockchain",         "verifychain",            &verifychain,            true,      false,      false },
+    { "blockchain",         "invalidateblock",        &invalidateblock,        true,      true,       false },
+    { "blockchain",         "reconsiderblock",        &reconsiderblock,        true,      true,       false },
 
     /* Mining */
     { "mining",             "getblocktemplate",       &getblocktemplate,       true,      false,      false },
@@ -302,6 +302,11 @@ static const CRPCCommand vRPCCommands[] =
     { "util",               "verifymessage",          &verifymessage,          true,      false,      false },
     { "util",               "estimatefee",            &estimatefee,            true,      true,       false },
     { "util",               "estimatepriority",       &estimatepriority,       true,      true,       false },
+
+    /* Not shown in help */
+    { "hidden",             "invalidateblock",        &invalidateblock,        true,      true,       false },
+    { "hidden",             "reconsiderblock",        &reconsiderblock,        true,      true,       false },
+    { "hidden",             "setmocktime",            &setmocktime,            true,      false,      false },
 
     /* Namecoin functions */
     { "namecoin",           "name_show",              &name_show,              true,      false,      false },
@@ -438,7 +443,7 @@ class AcceptedConnectionImpl : public AcceptedConnection
 {
 public:
     AcceptedConnectionImpl(
-            asio::io_service& io_service,
+            boost::asio::io_service& io_service,
             ssl::context &context,
             bool fUseSSL) :
         sslStream(io_service, context),
@@ -463,11 +468,11 @@ public:
     }
 
     typename Protocol::endpoint peer;
-    asio::ssl::stream<typename Protocol::socket> sslStream;
+    boost::asio::ssl::stream<typename Protocol::socket> sslStream;
 
 private:
     SSLIOStreamDevice<Protocol> _d;
-    iostreams::stream< SSLIOStreamDevice<Protocol> > _stream;
+    boost::iostreams::stream< SSLIOStreamDevice<Protocol> > _stream;
 };
 
 void ServiceConnection(AcceptedConnection *conn);
@@ -514,7 +519,7 @@ static void RPCAcceptHandler(boost::shared_ptr< basic_socket_acceptor<Protocol, 
                              const boost::system::error_code& error)
 {
     // Immediately start accepting new connections, except when we're cancelled or our socket is closed.
-    if (error != asio::error::operation_aborted && acceptor->is_open())
+    if (error != boost::asio::error::operation_aborted && acceptor->is_open())
         RPCListen(acceptor, context, fUseSSL);
 
     AcceptedConnectionImpl<ip::tcp>* tcp_conn = dynamic_cast< AcceptedConnectionImpl<ip::tcp>* >(conn.get());
@@ -545,7 +550,7 @@ static ip::tcp::endpoint ParseEndpoint(const std::string &strEndpoint, int defau
     std::string addr;
     int port = defaultPort;
     SplitHostPort(strEndpoint, port, addr);
-    return ip::tcp::endpoint(asio::ip::address::from_string(addr), port);
+    return ip::tcp::endpoint(boost::asio::ip::address::from_string(addr), port);
 }
 
 void StartRPCThreads()
@@ -581,13 +586,8 @@ void StartRPCThreads()
     {
         unsigned char rand_pwd[32];
         GetRandBytes(rand_pwd, 32);
-        string strWhatAmI = "To use bitcoind";
-        if (mapArgs.count("-server"))
-            strWhatAmI = strprintf(_("To use the %s option"), "\"-server\"");
-        else if (mapArgs.count("-daemon"))
-            strWhatAmI = strprintf(_("To use the %s option"), "\"-daemon\"");
         uiInterface.ThreadSafeMessageBox(strprintf(
-            _("%s, you must set a rpcpassword in the configuration file:\n"
+            _("To use bitcoind, or the -server option to bitcoin-qt, you must set an rpcpassword in the configuration file:\n"
               "%s\n"
               "It is recommended you use the following random password:\n"
               "rpcuser=bitcoinrpc\n"
@@ -597,7 +597,6 @@ void StartRPCThreads()
               "If the file does not exist, create it with owner-readable-only file permissions.\n"
               "It is also recommended to set alertnotify so you are notified of problems;\n"
               "for example: alertnotify=echo %%s | mail -s \"Bitcoin Alert\" admin@foo.com\n"),
-                strWhatAmI,
                 GetConfigFile().string(),
                 EncodeBase58(&rand_pwd[0],&rand_pwd[0]+32)),
                 "", CClientUIInterface::MSG_ERROR | CClientUIInterface::SECURE);
@@ -606,23 +605,23 @@ void StartRPCThreads()
     }
 
     assert(rpc_io_service == NULL);
-    rpc_io_service = new asio::io_service();
+    rpc_io_service = new boost::asio::io_service();
     rpc_ssl_context = new ssl::context(*rpc_io_service, ssl::context::sslv23);
 
     const bool fUseSSL = GetBoolArg("-rpcssl", false);
 
     if (fUseSSL)
     {
-        rpc_ssl_context->set_options(ssl::context::no_sslv2);
+        rpc_ssl_context->set_options(ssl::context::no_sslv2 | ssl::context::no_sslv3);
 
-        filesystem::path pathCertFile(GetArg("-rpcsslcertificatechainfile", "server.cert"));
-        if (!pathCertFile.is_complete()) pathCertFile = filesystem::path(GetDataDir()) / pathCertFile;
-        if (filesystem::exists(pathCertFile)) rpc_ssl_context->use_certificate_chain_file(pathCertFile.string());
+        boost::filesystem::path pathCertFile(GetArg("-rpcsslcertificatechainfile", "server.cert"));
+        if (!pathCertFile.is_complete()) pathCertFile = boost::filesystem::path(GetDataDir()) / pathCertFile;
+        if (boost::filesystem::exists(pathCertFile)) rpc_ssl_context->use_certificate_chain_file(pathCertFile.string());
         else LogPrintf("ThreadRPCServer ERROR: missing server certificate file %s\n", pathCertFile.string());
 
-        filesystem::path pathPKFile(GetArg("-rpcsslprivatekeyfile", "server.pem"));
-        if (!pathPKFile.is_complete()) pathPKFile = filesystem::path(GetDataDir()) / pathPKFile;
-        if (filesystem::exists(pathPKFile)) rpc_ssl_context->use_private_key_file(pathPKFile.string(), ssl::context::pem);
+        boost::filesystem::path pathPKFile(GetArg("-rpcsslprivatekeyfile", "server.pem"));
+        if (!pathPKFile.is_complete()) pathPKFile = boost::filesystem::path(GetDataDir()) / pathPKFile;
+        if (boost::filesystem::exists(pathPKFile)) rpc_ssl_context->use_private_key_file(pathPKFile.string(), ssl::context::pem);
         else LogPrintf("ThreadRPCServer ERROR: missing server private key file %s\n", pathPKFile.string());
 
         string strCiphers = GetArg("-rpcsslciphers", "TLSv1.2+HIGH:TLSv1+HIGH:!SSLv2:!aNULL:!eNULL:!3DES:@STRENGTH");
@@ -634,8 +633,8 @@ void StartRPCThreads()
     int defaultPort = GetArg("-rpcport", BaseParams().RPCPort());
     if (!mapArgs.count("-rpcallowip")) // Default to loopback if not allowing external IPs
     {
-        vEndpoints.push_back(ip::tcp::endpoint(asio::ip::address_v6::loopback(), defaultPort));
-        vEndpoints.push_back(ip::tcp::endpoint(asio::ip::address_v4::loopback(), defaultPort));
+        vEndpoints.push_back(ip::tcp::endpoint(boost::asio::ip::address_v6::loopback(), defaultPort));
+        vEndpoints.push_back(ip::tcp::endpoint(boost::asio::ip::address_v4::loopback(), defaultPort));
         if (mapArgs.count("-rpcbind"))
         {
             LogPrintf("WARNING: option -rpcbind was ignored because -rpcallowip was not specified, refusing to allow everyone to connect\n");
@@ -647,7 +646,7 @@ void StartRPCThreads()
             try {
                 vEndpoints.push_back(ParseEndpoint(addr, defaultPort));
             }
-            catch(const boost::system::system_error &)
+            catch (const boost::system::system_error&)
             {
                 uiInterface.ThreadSafeMessageBox(
                     strprintf(_("Could not parse -rpcbind value %s as network address"), addr),
@@ -657,8 +656,8 @@ void StartRPCThreads()
             }
         }
     } else { // No specific bind address specified, bind to any
-        vEndpoints.push_back(ip::tcp::endpoint(asio::ip::address_v6::any(), defaultPort));
-        vEndpoints.push_back(ip::tcp::endpoint(asio::ip::address_v4::any(), defaultPort));
+        vEndpoints.push_back(ip::tcp::endpoint(boost::asio::ip::address_v6::any(), defaultPort));
+        vEndpoints.push_back(ip::tcp::endpoint(boost::asio::ip::address_v4::any(), defaultPort));
         // Prefer making the socket dual IPv6/IPv4 instead of binding
         // to both addresses seperately.
         bBindAny = true;
@@ -666,20 +665,22 @@ void StartRPCThreads()
 
     bool fListening = false;
     std::string strerr;
+    std::string straddress;
     BOOST_FOREACH(const ip::tcp::endpoint &endpoint, vEndpoints)
     {
-        asio::ip::address bindAddress = endpoint.address();
-        LogPrintf("Binding RPC on address %s port %i (IPv4+IPv6 bind any: %i)\n", bindAddress.to_string(), endpoint.port(), bBindAny);
-        boost::system::error_code v6_only_error;
-        boost::shared_ptr<ip::tcp::acceptor> acceptor(new ip::tcp::acceptor(*rpc_io_service));
-
         try {
+            boost::asio::ip::address bindAddress = endpoint.address();
+            straddress = bindAddress.to_string();
+            LogPrintf("Binding RPC on address %s port %i (IPv4+IPv6 bind any: %i)\n", straddress, endpoint.port(), bBindAny);
+            boost::system::error_code v6_only_error;
+            boost::shared_ptr<ip::tcp::acceptor> acceptor(new ip::tcp::acceptor(*rpc_io_service));
+
             acceptor->open(endpoint.protocol());
             acceptor->set_option(boost::asio::ip::tcp::acceptor::reuse_address(true));
 
             // Try making the socket dual IPv6/IPv4 when listening on the IPv6 "any" address
             acceptor->set_option(boost::asio::ip::v6_only(
-                !bBindAny || bindAddress != asio::ip::address_v6::any()), v6_only_error);
+                !bBindAny || bindAddress != boost::asio::ip::address_v6::any()), v6_only_error);
 
             acceptor->bind(endpoint);
             acceptor->listen(socket_base::max_connections);
@@ -689,13 +690,13 @@ void StartRPCThreads()
             fListening = true;
             rpc_acceptors.push_back(acceptor);
             // If dual IPv6/IPv4 bind successful, skip binding to IPv4 separately
-            if(bBindAny && bindAddress == asio::ip::address_v6::any() && !v6_only_error)
+            if(bBindAny && bindAddress == boost::asio::ip::address_v6::any() && !v6_only_error)
                 break;
         }
-        catch(boost::system::system_error &e)
+        catch (const boost::system::system_error& e)
         {
-            LogPrintf("ERROR: Binding RPC on address %s port %i failed: %s\n", bindAddress.to_string(), endpoint.port(), e.what());
-            strerr = strprintf(_("An error occurred while setting up the RPC address %s port %u for listening: %s"), bindAddress.to_string(), endpoint.port(), e.what());
+            LogPrintf("ERROR: Binding RPC on address %s port %i failed: %s\n", straddress, endpoint.port(), e.what());
+            strerr = strprintf(_("An error occurred while setting up the RPC address %s port %u for listening: %s"), straddress, endpoint.port(), e.what());
         }
     }
 
@@ -707,7 +708,7 @@ void StartRPCThreads()
 
     rpc_worker_group = new boost::thread_group();
     for (int i = 0; i < GetArg("-rpcthreads", 4); i++)
-        rpc_worker_group->create_thread(boost::bind(&asio::io_service::run, rpc_io_service));
+        rpc_worker_group->create_thread(boost::bind(&boost::asio::io_service::run, rpc_io_service));
     fRPCRunning = true;
 }
 
@@ -715,12 +716,12 @@ void StartDummyRPCThread()
 {
     if(rpc_io_service == NULL)
     {
-        rpc_io_service = new asio::io_service();
+        rpc_io_service = new boost::asio::io_service();
         /* Create dummy "work" to keep the thread from exiting when no timeouts active,
          * see http://www.boost.org/doc/libs/1_51_0/doc/html/boost_asio/reference/io_service.html#boost_asio.reference.io_service.stopping_the_io_service_from_running_out_of_work */
-        rpc_dummy_work = new asio::io_service::work(*rpc_io_service);
+        rpc_dummy_work = new boost::asio::io_service::work(*rpc_io_service);
         rpc_worker_group = new boost::thread_group();
-        rpc_worker_group->create_thread(boost::bind(&asio::io_service::run, rpc_io_service));
+        rpc_worker_group->create_thread(boost::bind(&boost::asio::io_service::run, rpc_io_service));
         fRPCRunning = true;
     }
 }
@@ -733,7 +734,7 @@ void StopRPCThreads()
 
     // First, cancel all timers and acceptors
     // This is not done automatically by ->stop(), and in some cases the destructor of
-    // asio::io_service can hang if this is skipped.
+    // boost::asio::io_service can hang if this is skipped.
     boost::system::error_code ec;
     BOOST_FOREACH(const boost::shared_ptr<ip::tcp::acceptor> &acceptor, rpc_acceptors)
     {
@@ -778,6 +779,14 @@ void SetRPCWarmupFinished()
     fRPCInWarmup = false;
 }
 
+bool RPCIsInWarmup(std::string *outStatus)
+{
+    LOCK(cs_rpcWarmup);
+    if (outStatus)
+        *outStatus = rpcWarmupStatus;
+    return fRPCInWarmup;
+}
+
 void RPCRunHandler(const boost::system::error_code& err, boost::function<void(void)> func)
 {
     if (!err)
@@ -793,7 +802,7 @@ void RPCRunLater(const std::string& name, boost::function<void(void)> func, int6
         deadlineTimers.insert(make_pair(name,
                                         boost::shared_ptr<deadline_timer>(new deadline_timer(*rpc_io_service))));
     }
-    deadlineTimers[name]->expires_from_now(posix_time::seconds(nSeconds));
+    deadlineTimers[name]->expires_from_now(boost::posix_time::seconds(nSeconds));
     deadlineTimers[name]->async_wait(boost::bind(RPCRunHandler, _1, func));
 }
 
@@ -850,11 +859,11 @@ static Object JSONRPCExecOne(const Value& req)
         Value result = tableRPC.execute(jreq.strMethod, jreq.params);
         rpc_result = JSONRPCReplyObj(result, Value::null, jreq.id);
     }
-    catch (Object& objError)
+    catch (const Object& objError)
     {
         rpc_result = JSONRPCReplyObj(Value::null, objError, jreq.id);
     }
-    catch (std::exception& e)
+    catch (const std::exception& e)
     {
         rpc_result = JSONRPCReplyObj(Value::null,
                                      JSONRPCError(RPC_PARSE_ERROR, e.what()), jreq.id);
@@ -930,12 +939,12 @@ static bool HTTPReq_JSONRPC(AcceptedConnection *conn,
 
         conn->stream() << HTTPReplyHeader(HTTP_OK, fRun, strReply.size()) << strReply << std::flush;
     }
-    catch (Object& objError)
+    catch (const Object& objError)
     {
         ErrorReply(conn->stream(), objError, jreq.id);
         return false;
     }
-    catch (std::exception& e)
+    catch (const std::exception& e)
     {
         ErrorReply(conn->stream(), JSONRPCError(RPC_PARSE_ERROR, e.what()), jreq.id);
         return false;
@@ -960,7 +969,7 @@ void ServiceConnection(AcceptedConnection *conn)
         ReadHTTPMessage(conn->stream(), mapHeaders, strRequest, nProto, MAX_SIZE);
 
         // HTTP Keep-Alive is false; close connection immediately
-        if (mapHeaders["connection"] == "close")
+        if ((mapHeaders["connection"] == "close") || (!GetBoolArg("-rpckeepalive", true)))
             fRun = false;
 
         // Process via JSON-RPC API
@@ -969,7 +978,7 @@ void ServiceConnection(AcceptedConnection *conn)
                 break;
 
         // Process via HTTP REST API
-        } else if (strURI.substr(0, 6) == "/rest/") {
+        } else if (strURI.substr(0, 6) == "/rest/" && GetBoolArg("-rest", false)) {
             if (!HTTPReq_REST(conn, strURI, mapHeaders, fRun))
                 break;
 
@@ -1021,7 +1030,7 @@ json_spirit::Value CRPCTable::execute(const std::string &strMethod, const json_s
         }
         return result;
     }
-    catch (std::exception& e)
+    catch (const std::exception& e)
     {
         throw JSONRPCError(RPC_MISC_ERROR, e.what());
     }

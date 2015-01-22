@@ -1,16 +1,17 @@
 // Copyright (c) 2009-2010 Satoshi Nakamoto
-// Copyright (c) 2009-2014 The Bitcoin developers
+// Copyright (c) 2009-2014 The Bitcoin Core developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 #ifndef BITCOIN_CHAINPARAMS_H
 #define BITCOIN_CHAINPARAMS_H
 
+#include "amount.h"
 #include "chainparamsbase.h"
 #include "checkpoints.h"
-#include "core/block.h"
+#include "primitives/block.h"
 #include "protocol.h"
-#include "uint256.h"
+#include "arith_uint256.h"
 
 #include <map>
 #include <vector>
@@ -63,7 +64,7 @@ public:
     const MessageStartChars& MessageStart() const { return pchMessageStart; }
     const std::vector<unsigned char>& AlertKey() const { return vAlertPubKey; }
     int GetDefaultPort() const { return nDefaultPort; }
-    const uint256& ProofOfWorkLimit() const { return bnProofOfWorkLimit; }
+    const arith_uint256& ProofOfWorkLimit() const { return bnProofOfWorkLimit; }
     int SubsidyHalvingInterval() const { return nSubsidyHalvingInterval; }
     /** Used to check majorities for block version upgrade */
     int EnforceBlockUpgradeMajority() const { return nEnforceBlockUpgradeMajority; }
@@ -115,8 +116,8 @@ public:
     /* Return the expiration depth for names at the given height.  */
     virtual unsigned NameExpirationDepth(unsigned nHeight) const = 0;
 
-    /* Return whether to allow lenient NAME_NEW version check.  */
-    virtual bool LenientVersionCheck(unsigned nHeight) const = 0;
+    /* Return minimum locked amount in a name.  */
+    virtual CAmount MinNameCoinAmount(unsigned nHeight) const = 0;
 
     /* Check whether the given tx is a "historic relic" for which to
        skip the validity check.  Return also the "type" of the bug,
@@ -131,7 +132,7 @@ protected:
     //! Raw pub key bytes for the broadcast alert signing key.
     std::vector<unsigned char> vAlertPubKey;
     int nDefaultPort;
-    uint256 bnProofOfWorkLimit;
+    arith_uint256 bnProofOfWorkLimit;
     int nSubsidyHalvingInterval;
     int nEnforceBlockUpgradeMajority;
     int nRejectBlockOutdatedMajority;
@@ -141,7 +142,6 @@ protected:
     int nMinerThreads;
     std::vector<CDNSSeedData> vSeeds;
     std::vector<unsigned char> base58Prefixes[MAX_BASE58_TYPES];
-    CBaseChainParams::Network networkID;
     std::string strNetworkID;
     CBlock genesis;
     std::vector<CAddress> vFixedSeeds;
@@ -162,7 +162,7 @@ protected:
     /* Utility routine to insert into historic bug map.  */
     inline void addBug(unsigned nHeight, const char* txid, BugType type)
     {
-        std::pair<unsigned, uint256> key(nHeight, uint256(txid));
+        std::pair<unsigned, uint256> key(nHeight, uint256S(txid));
         mapHistoricBugs.insert(std::make_pair(key, type));
     }
 };
@@ -183,7 +183,7 @@ public:
     virtual void setDefaultCheckMemPool(bool aDefaultCheckMemPool)=0;
     virtual void setAllowMinDifficultyBlocks(bool aAllowMinDifficultyBlocks)=0;
     virtual void setSkipProofOfWorkCheck(bool aSkipProofOfWorkCheck)=0;
-    virtual void setProofOfWorkLimit(const uint256& limit)=0;
+    virtual void setProofOfWorkLimit(const arith_uint256& limit)=0;
 };
 
 

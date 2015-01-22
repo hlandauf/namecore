@@ -1,5 +1,5 @@
 // Copyright (c) 2009-2010 Satoshi Nakamoto
-// Copyright (c) 2009-2014 The Bitcoin developers
+// Copyright (c) 2009-2014 The Bitcoin Core developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -35,8 +35,8 @@ enum
     SCRIPT_VERIFY_P2SH      = (1U << 0),
 
     // Passing a non-strict-DER signature or one with undefined hashtype to a checksig operation causes script failure.
-    // Passing a pubkey that is not (0x04 + 64 bytes) or (0x02 or 0x03 + 32 bytes) to checksig causes that pubkey to be
-    // skipped (not softfork safe: this flag can widen the validity of OP_CHECKSIG OP_NOT).
+    // Evaluating a pubkey that is not (0x04 + 64 bytes) or (0x02 or 0x03 + 32 bytes) by checksig causes script failure.
+    // (softfork safe, but not used or intended as a consensus rule).
     SCRIPT_VERIFY_STRICTENC = (1U << 1),
 
     // Passing a non-strict-DER signature to a checksig operation causes script failure (softfork safe, BIP62 rule 1)
@@ -67,8 +67,18 @@ enum
     // discouraged NOPs fails the script. This verification flag will never be
     // a mandatory flag applied to scripts in a block. NOPs that are not
     // executed, e.g.  within an unexecuted IF ENDIF block, are *not* rejected.
-    SCRIPT_VERIFY_DISCOURAGE_UPGRADABLE_NOPS  = (1U << 7)
+    SCRIPT_VERIFY_DISCOURAGE_UPGRADABLE_NOPS  = (1U << 7),
 
+    // Require that only a single stack element remains after evaluation. This changes the success criterion from
+    // "At least one stack element must remain, and when interpreted as a boolean, it must be true" to
+    // "Exactly one stack element must remain, and when interpreted as a boolean, it must be true".
+    // (softfork safe, BIP62 rule 6)
+    // Note: CLEANSTACK should never be used without P2SH.
+    SCRIPT_VERIFY_CLEANSTACK = (1U << 8),
+
+    // Perform name checks in "mempool" mode.  This allows / disallows
+    // certain stuff (e. g., it allows immature spending of name_new's).
+    SCRIPT_VERIFY_NAMES_MEMPOOL = (1U << 24),
 };
 
 uint256 SignatureHash(const CScript &scriptCode, const CTransaction& txTo, unsigned int nIn, int nHashType);

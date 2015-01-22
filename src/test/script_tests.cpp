@@ -23,12 +23,6 @@
 #include <string>
 #include <vector>
 
-#include <boost/algorithm/string/classification.hpp>
-#include <boost/algorithm/string/predicate.hpp>
-#include <boost/algorithm/string/replace.hpp>
-#include <boost/algorithm/string/split.hpp>
-#include <boost/filesystem/operations.hpp>
-#include <boost/filesystem/path.hpp>
 #include <boost/foreach.hpp>
 #include <boost/test/unit_test.hpp>
 #include "json/json_spirit_reader_template.h"
@@ -37,7 +31,6 @@
 
 using namespace std;
 using namespace json_spirit;
-using namespace boost::algorithm;
 
 // Uncomment if you want to output updated JSON tests.
 // #define UPDATE_JSON_TESTS
@@ -248,8 +241,9 @@ public:
     {
         uint256 hash = SignatureHash(scriptPubKey, spendTx, 0, nHashType);
         std::vector<unsigned char> vchSig, r, s;
+        uint32_t iter = 0;
         do {
-            key.Sign(hash, vchSig);
+            key.Sign(hash, vchSig, iter++);
             if ((lenS == 33) != (vchSig[5 + vchSig[3]] == 33)) {
                 NegateSignatureS(vchSig);
             }
@@ -428,15 +422,24 @@ BOOST_AUTO_TEST_CASE(script_build)
     bad.push_back(TestBuilder(CScript() << ToByteVector(keys.pubkey0H) << OP_CHECKSIG << OP_NOT,
                               "P2PK NOT with hybrid pubkey but no STRICTENC", 0
                              ).PushSig(keys.key0, SIGHASH_ALL));
-    good.push_back(TestBuilder(CScript() << ToByteVector(keys.pubkey0H) << OP_CHECKSIG << OP_NOT,
-                               "P2PK NOT with hybrid pubkey", SCRIPT_VERIFY_STRICTENC
-                              ).PushSig(keys.key0, SIGHASH_ALL));
+    bad.push_back(TestBuilder(CScript() << ToByteVector(keys.pubkey0H) << OP_CHECKSIG << OP_NOT,
+                              "P2PK NOT with hybrid pubkey", SCRIPT_VERIFY_STRICTENC
+                             ).PushSig(keys.key0, SIGHASH_ALL));
     good.push_back(TestBuilder(CScript() << ToByteVector(keys.pubkey0H) << OP_CHECKSIG << OP_NOT,
                                "P2PK NOT with invalid hybrid pubkey but no STRICTENC", 0
                               ).PushSig(keys.key0, SIGHASH_ALL).DamagePush(10));
-    good.push_back(TestBuilder(CScript() << ToByteVector(keys.pubkey0H) << OP_CHECKSIG << OP_NOT,
-                               "P2PK NOT with invalid hybrid pubkey", SCRIPT_VERIFY_STRICTENC
-                              ).PushSig(keys.key0, SIGHASH_ALL).DamagePush(10));
+    bad.push_back(TestBuilder(CScript() << ToByteVector(keys.pubkey0H) << OP_CHECKSIG << OP_NOT,
+                              "P2PK NOT with invalid hybrid pubkey", SCRIPT_VERIFY_STRICTENC
+                             ).PushSig(keys.key0, SIGHASH_ALL).DamagePush(10));
+    good.push_back(TestBuilder(CScript() << OP_1 << ToByteVector(keys.pubkey0H) << ToByteVector(keys.pubkey1C) << OP_2 << OP_CHECKMULTISIG,
+                               "1-of-2 with the second 1 hybrid pubkey and no STRICTENC", 0
+                              ).Num(0).PushSig(keys.key1, SIGHASH_ALL));
+    good.push_back(TestBuilder(CScript() << OP_1 << ToByteVector(keys.pubkey0H) << ToByteVector(keys.pubkey1C) << OP_2 << OP_CHECKMULTISIG,
+                               "1-of-2 with the second 1 hybrid pubkey", SCRIPT_VERIFY_STRICTENC
+                              ).Num(0).PushSig(keys.key1, SIGHASH_ALL));
+    bad.push_back(TestBuilder(CScript() << OP_1 << ToByteVector(keys.pubkey1C) << ToByteVector(keys.pubkey0H) << OP_2 << OP_CHECKMULTISIG,
+                              "1-of-2 with the first 1 hybrid pubkey", SCRIPT_VERIFY_STRICTENC
+                             ).Num(0).PushSig(keys.key1, SIGHASH_ALL));
 
     good.push_back(TestBuilder(CScript() << ToByteVector(keys.pubkey1) << OP_CHECKSIG,
                                "P2PK with undefined hashtype but no STRICTENC", 0
@@ -480,25 +483,35 @@ BOOST_AUTO_TEST_CASE(script_build)
                                "2-of-2 with two identical keys and sigs pushed", SCRIPT_VERIFY_SIGPUSHONLY
                               ).Num(0).PushSig(keys.key1).PushSig(keys.key1));
 
+    good.push_back(TestBuilder(CScript() << ToByteVector(keys.pubkey0) << OP_CHECKSIG,
+                               "P2PK with unnecessary input but no CLEANSTACK", SCRIPT_VERIFY_P2SH
+                              ).Num(11).PushSig(keys.key0));
+    bad.push_back(TestBuilder(CScript() << ToByteVector(keys.pubkey0) << OP_CHECKSIG,
+                              "P2PK with unnecessary input", SCRIPT_VERIFY_CLEANSTACK | SCRIPT_VERIFY_P2SH
+                             ).Num(11).PushSig(keys.key0));
+    good.push_back(TestBuilder(CScript() << ToByteVector(keys.pubkey0) << OP_CHECKSIG,
+                               "P2SH with unnecessary input but no CLEANSTACK", SCRIPT_VERIFY_P2SH, true
+                              ).Num(11).PushSig(keys.key0).PushRedeem());
+    bad.push_back(TestBuilder(CScript() << ToByteVector(keys.pubkey0) << OP_CHECKSIG,
+                              "P2SH with unnecessary input", SCRIPT_VERIFY_CLEANSTACK | SCRIPT_VERIFY_P2SH, true
+                             ).Num(11).PushSig(keys.key0).PushRedeem());
+    good.push_back(TestBuilder(CScript() << ToByteVector(keys.pubkey0) << OP_CHECKSIG,
+                               "P2SH with CLEANSTACK", SCRIPT_VERIFY_CLEANSTACK | SCRIPT_VERIFY_P2SH, true
+                              ).PushSig(keys.key0).PushRedeem());
 
-    std::map<std::string, Array> tests_good;
-    std::map<std::string, Array> tests_bad;
+
+    std::set<std::string> tests_good;
+    std::set<std::string> tests_bad;
 
     {
         Array json_good = read_json(std::string(json_tests::script_valid, json_tests::script_valid + sizeof(json_tests::script_valid)));
         Array json_bad = read_json(std::string(json_tests::script_invalid, json_tests::script_invalid + sizeof(json_tests::script_invalid)));
 
         BOOST_FOREACH(Value& tv, json_good) {
-            Array test = tv.get_array();
-            if (test.size() >= 4) {
-                tests_good[test[3].get_str()] = test;
-            }
+            tests_good.insert(write_string(Value(tv.get_array()), true));
         }
         BOOST_FOREACH(Value& tv, json_bad) {
-            Array test = tv.get_array();
-            if (test.size() >= 4) {
-                tests_bad[test[3].get_str()] = test;
-            }
+            tests_bad.insert(write_string(Value(tv.get_array()), true));
         }
     }
 
@@ -507,27 +520,23 @@ BOOST_AUTO_TEST_CASE(script_build)
 
     BOOST_FOREACH(TestBuilder& test, good) {
         test.Test(true);
-        if (tests_good.count(test.GetComment()) == 0) {
+        std::string str = write_string(Value(test.GetJSON()), true);
 #ifndef UPDATE_JSON_TESTS
+        if (tests_good.count(str) == 0) {
             BOOST_CHECK_MESSAGE(false, "Missing auto script_valid test: " + test.GetComment());
-#endif
-            strGood += write_string(Value(test.GetJSON()), true) + ",\n";
-        } else {
-            BOOST_CHECK_MESSAGE(ParseScript(tests_good[test.GetComment()][1].get_str()) == test.GetScriptPubKey(), "ScriptPubKey mismatch in auto script_valid test: " + test.GetComment());
-            strGood += write_string(Value(tests_good[test.GetComment()]), true) + ",\n";
         }
+#endif
+        strGood += str + ",\n";
     }
     BOOST_FOREACH(TestBuilder& test, bad) {
         test.Test(false);
-        if (tests_bad.count(test.GetComment()) == 0) {
+        std::string str = write_string(Value(test.GetJSON()), true);
 #ifndef UPDATE_JSON_TESTS
+        if (tests_bad.count(str) == 0) {
             BOOST_CHECK_MESSAGE(false, "Missing auto script_invalid test: " + test.GetComment());
-#endif
-            strBad += write_string(Value(test.GetJSON()), true) + ",\n";
-        } else {
-            BOOST_CHECK_MESSAGE(ParseScript(tests_bad[test.GetComment()][1].get_str()) == test.GetScriptPubKey(), "ScriptPubKey mismatch in auto script_invalid test: " + test.GetComment());
-            strBad += write_string(Value(tests_bad[test.GetComment()]), true) + ",\n";
         }
+#endif
+        strBad += str + ",\n";
     }
 
 #ifdef UPDATE_JSON_TESTS
@@ -607,21 +616,21 @@ BOOST_AUTO_TEST_CASE(script_PushData)
 
     ScriptError err;
     vector<vector<unsigned char> > directStack;
-    BOOST_CHECK(EvalScript(directStack, CScript(&direct[0], &direct[sizeof(direct)]), true, BaseSignatureChecker(), &err));
+    BOOST_CHECK(EvalScript(directStack, CScript(&direct[0], &direct[sizeof(direct)]), SCRIPT_VERIFY_P2SH, BaseSignatureChecker(), &err));
     BOOST_CHECK_MESSAGE(err == SCRIPT_ERR_OK, ScriptErrorString(err));
 
     vector<vector<unsigned char> > pushdata1Stack;
-    BOOST_CHECK(EvalScript(pushdata1Stack, CScript(&pushdata1[0], &pushdata1[sizeof(pushdata1)]), true, BaseSignatureChecker(), &err));
+    BOOST_CHECK(EvalScript(pushdata1Stack, CScript(&pushdata1[0], &pushdata1[sizeof(pushdata1)]), SCRIPT_VERIFY_P2SH, BaseSignatureChecker(), &err));
     BOOST_CHECK(pushdata1Stack == directStack);
     BOOST_CHECK_MESSAGE(err == SCRIPT_ERR_OK, ScriptErrorString(err));
 
     vector<vector<unsigned char> > pushdata2Stack;
-    BOOST_CHECK(EvalScript(pushdata2Stack, CScript(&pushdata2[0], &pushdata2[sizeof(pushdata2)]), true, BaseSignatureChecker(), &err));
+    BOOST_CHECK(EvalScript(pushdata2Stack, CScript(&pushdata2[0], &pushdata2[sizeof(pushdata2)]), SCRIPT_VERIFY_P2SH, BaseSignatureChecker(), &err));
     BOOST_CHECK(pushdata2Stack == directStack);
     BOOST_CHECK_MESSAGE(err == SCRIPT_ERR_OK, ScriptErrorString(err));
 
     vector<vector<unsigned char> > pushdata4Stack;
-    BOOST_CHECK(EvalScript(pushdata4Stack, CScript(&pushdata4[0], &pushdata4[sizeof(pushdata4)]), true, BaseSignatureChecker(), &err));
+    BOOST_CHECK(EvalScript(pushdata4Stack, CScript(&pushdata4[0], &pushdata4[sizeof(pushdata4)]), SCRIPT_VERIFY_P2SH, BaseSignatureChecker(), &err));
     BOOST_CHECK(pushdata4Stack == directStack);
     BOOST_CHECK_MESSAGE(err == SCRIPT_ERR_OK, ScriptErrorString(err));
 }

@@ -1,5 +1,5 @@
 // Copyright (c) 2010 Satoshi Nakamoto
-// Copyright (c) 2009-2014 The Bitcoin developers
+// Copyright (c) 2009-2014 The Bitcoin Core developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -12,6 +12,7 @@
 #include "netbase.h"
 #include "timedata.h"
 #include "util.h"
+#include "utilmoneystr.h"
 #include "wallet.h"
 #include "walletdb.h"
 
@@ -22,8 +23,6 @@
 #include "json/json_spirit_value.h"
 
 using namespace std;
-using namespace boost;
-using namespace boost::assign;
 using namespace json_spirit;
 
 int64_t nWalletUnlockTime;
@@ -309,6 +308,45 @@ Value getaddressesbyaccount(const Array& params, bool fHelp)
     return ret;
 }
 
+void SendMoney(const CTxDestination &address, CAmount nValue, CWalletTx& wtxNew)
+{
+    // Parse Bitcoin address
+    CScript scriptPubKey = GetScriptForDestination(address);
+
+    return SendMoneyToScript(scriptPubKey, NULL, nValue, wtxNew);
+}
+
+void SendMoneyToScript(const CScript &scriptPubKey, const CTxIn* withInput, CAmount nValue, CWalletTx& wtxNew)
+{
+    // Check amount
+    if (nValue <= 0)
+        throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid amount");
+
+    if (nValue > pwalletMain->GetBalance())
+        throw JSONRPCError(RPC_WALLET_INSUFFICIENT_FUNDS, "Insufficient funds");
+
+    string strError;
+    if (pwalletMain->IsLocked())
+    {
+        strError = "Error: Wallet locked, unable to create transaction!";
+        LogPrintf("SendMoney() : %s", strError);
+        throw JSONRPCError(RPC_WALLET_ERROR, strError);
+    }
+
+    // Create and send the transaction
+    CReserveKey reservekey(pwalletMain);
+    CAmount nFeeRequired;
+    if (!pwalletMain->CreateTransaction(scriptPubKey, withInput, nValue, wtxNew, reservekey, nFeeRequired, strError))
+    {
+        if (nValue + nFeeRequired > pwalletMain->GetBalance())
+            strError = strprintf("Error: This transaction requires a transaction fee of at least %s because of its amount, complexity, or use of recently received funds!", FormatMoney(nFeeRequired));
+        LogPrintf("SendMoney() : %s\n", strError);
+        throw JSONRPCError(RPC_WALLET_ERROR, strError);
+    }
+    if (!pwalletMain->CommitTransaction(wtxNew, reservekey))
+        throw JSONRPCError(RPC_WALLET_ERROR, "Error: The transaction was rejected! This might happen if some of the coins in your wallet were already spent, such as if you used a copy of wallet.dat and coins were spent in the copy but not marked as spent here.");
+}
+
 Value sendtoaddress(const Array& params, bool fHelp)
 {
     if (fHelp || params.size() < 2 || params.size() > 4)
@@ -348,9 +386,7 @@ Value sendtoaddress(const Array& params, bool fHelp)
 
     EnsureWalletIsUnlocked();
 
-    string strError = pwalletMain->SendMoney(address.Get(), nAmount, wtx);
-    if (strError != "")
-        throw JSONRPCError(RPC_WALLET_ERROR, strError);
+    SendMoney(address.Get(), nAmount, wtx);
 
     return wtx.GetHash().GetHex();
 }
@@ -791,10 +827,7 @@ Value sendfrom(const Array& params, bool fHelp)
     if (nAmount > nBalance)
         throw JSONRPCError(RPC_WALLET_INSUFFICIENT_FUNDS, "Account has insufficient funds");
 
-    // Send
-    string strError = pwalletMain->SendMoney(address.Get(), nAmount, wtx);
-    if (strError != "")
-        throw JSONRPCError(RPC_WALLET_ERROR, strError);
+    SendMoney(address.Get(), nAmount, wtx);
 
     return wtx.GetHash().GetHex();
 }
@@ -1073,7 +1106,7 @@ Value listreceivedbyaddress(const Array& params, bool fHelp)
             "\nResult:\n"
             "[\n"
             "  {\n"
-            "    \"involvesWatchonly\" : \"true\",    (bool) Only returned if imported addresses were involved in transaction\n"
+            "    \"involvesWatchonly\" : true,        (bool) Only returned if imported addresses were involved in transaction\n"
             "    \"address\" : \"receivingaddress\",  (string) The receiving address\n"
             "    \"account\" : \"accountname\",       (string) The account of the receiving address. The default account is \"\".\n"
             "    \"amount\" : x.xxx,                  (numeric) The total amount in btc received by the address\n"
@@ -1105,7 +1138,7 @@ Value listreceivedbyaccount(const Array& params, bool fHelp)
             "\nResult:\n"
             "[\n"
             "  {\n"
-            "    \"involvesWatchonly\" : \"true\",    (bool) Only returned if imported addresses were involved in transaction\n"
+            "    \"involvesWatchonly\" : true,   (bool) Only returned if imported addresses were involved in transaction\n"
             "    \"account\" : \"accountname\",  (string) The account name of the receiving account\n"
             "    \"amount\" : x.xxx,             (numeric) The total amount received by addresses with this account\n"
             "    \"confirmations\" : n           (numeric) The number of confirmations of the most recent transaction included\n"
@@ -1451,7 +1484,7 @@ Value listsinceblock(const Array& params, bool fHelp)
 
     if (params.size() > 0)
     {
-        uint256 blockId = 0;
+        uint256 blockId;
 
         blockId.SetHex(params[0].get_str());
         BlockMap::iterator it = mapBlockIndex.find(blockId);
@@ -1484,7 +1517,7 @@ Value listsinceblock(const Array& params, bool fHelp)
     }
 
     CBlockIndex *pblockLast = chainActive[chainActive.Height() + 1 - target_confirms];
-    uint256 lastblock = pblockLast ? pblockLast->GetBlockHash() : 0;
+    uint256 lastblock = pblockLast ? pblockLast->GetBlockHash() : uint256();
 
     Object ret;
     ret.push_back(Pair("transactions", transactions));
@@ -1847,9 +1880,9 @@ Value lockunspent(const Array& params, bool fHelp)
         );
 
     if (params.size() == 1)
-        RPCTypeCheck(params, list_of(bool_type));
+        RPCTypeCheck(params, boost::assign::list_of(bool_type));
     else
-        RPCTypeCheck(params, list_of(bool_type)(array_type));
+        RPCTypeCheck(params, boost::assign::list_of(bool_type)(array_type));
 
     bool fUnlock = params[0].get_bool();
 
@@ -1866,7 +1899,7 @@ Value lockunspent(const Array& params, bool fHelp)
             throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid parameter, expected object");
         const Object& o = output.get_obj();
 
-        RPCTypeCheck(o, map_list_of("txid", str_type)("vout", int_type));
+        RPCTypeCheck(o, boost::assign::map_list_of("txid", str_type)("vout", int_type));
 
         string txid = find_value(o, "txid").get_str();
         if (!IsHex(txid))
@@ -1876,7 +1909,7 @@ Value lockunspent(const Array& params, bool fHelp)
         if (nOutput < 0)
             throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid parameter, vout must be positive");
 
-        COutPoint outpt(uint256(txid), nOutput);
+        COutPoint outpt(uint256S(txid), nOutput);
 
         if (fUnlock)
             pwalletMain->UnlockCoin(outpt);
@@ -1964,7 +1997,9 @@ Value getwalletinfo(const Array& params, bool fHelp)
             "\nResult:\n"
             "{\n"
             "  \"walletversion\": xxxxx,     (numeric) the wallet version\n"
-            "  \"balance\": xxxxxxx,         (numeric) the total bitcoin balance of the wallet\n"
+            "  \"balance\": xxxxxxx,         (numeric) the total confirmed bitcoin balance of the wallet\n"
+            "  \"unconfirmed_balance\": xxx, (numeric) the total unconfirmed bitcoin balance of the wallet\n"
+            "  \"immature_balance\": xxxxxx, (numeric) the total immature balance of the wallet\n"
             "  \"txcount\": xxxxxxx,         (numeric) the total number of transactions in the wallet\n"
             "  \"keypoololdest\": xxxxxx,    (numeric) the timestamp (seconds since GMT epoch) of the oldest pre-generated key in the key pool\n"
             "  \"keypoolsize\": xxxx,        (numeric) how many new keys are pre-generated\n"
@@ -1978,6 +2013,8 @@ Value getwalletinfo(const Array& params, bool fHelp)
     Object obj;
     obj.push_back(Pair("walletversion", pwalletMain->GetVersion()));
     obj.push_back(Pair("balance",       ValueFromAmount(pwalletMain->GetBalance())));
+    obj.push_back(Pair("unconfirmed_balance", ValueFromAmount(pwalletMain->GetUnconfirmedBalance())));
+    obj.push_back(Pair("immature_balance",    ValueFromAmount(pwalletMain->GetImmatureBalance())));
     obj.push_back(Pair("txcount",       (int)pwalletMain->mapWallet.size()));
     obj.push_back(Pair("keypoololdest", pwalletMain->GetOldestKeyPoolTime()));
     obj.push_back(Pair("keypoolsize",   (int)pwalletMain->GetKeyPoolSize()));

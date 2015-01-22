@@ -6,12 +6,12 @@
 #include "chainparams.h"
 #include "init.h"
 #include "main.h"
-#include "names.h"
+#include "names/common.h"
 #include "random.h"
 #include "rpcserver.h"
 #include "util.h"
 
-#include "core/transaction.h"
+#include "primitives/transaction.h"
 
 #include "script/names.h"
 
@@ -25,6 +25,9 @@
 #include <boost/xpressive/xpressive_dynamic.hpp>
 
 #include <sstream>
+
+/** The amount of coins to lock in created transactions.  */
+static const CAmount NAME_LOCKED_AMOUNT = COIN / 100;
 
 /**
  * Utility routine to construct a "name info" object to return.  This is used
@@ -76,7 +79,7 @@ getNameInfo (const valtype& name, const valtype& value, const COutPoint& outp,
  * @param data The name's data.
  * @return A JSON object to return.
  */
-static json_spirit::Object
+json_spirit::Object
 getNameInfo (const valtype& name, const CNameData& data)
 {
   return getNameInfo (name, data.getValue (), data.getUpdateOutpoint (),
@@ -699,14 +702,7 @@ name_new (const json_spirit::Array& params, bool fHelp)
   const CScript newScript = CNameScript::buildNameNew (addrName, hash);
 
   CWalletTx wtx;
-  const std::string strError
-    = pwalletMain->SendMoneyToScript (newScript, NULL, NAME_LOCKED_AMOUNT, wtx);
-
-  if (strError != "")
-    {
-      keyName.ReturnKey ();
-      throw JSONRPCError (RPC_WALLET_ERROR, strError);
-    }
+  SendMoneyToScript (newScript, NULL, NAME_LOCKED_AMOUNT, wtx);
 
   keyName.KeepKey ();
 
@@ -816,16 +812,7 @@ name_firstupdate (const json_spirit::Array& params, bool fHelp)
     = CNameScript::buildNameFirstupdate (addrName, name, value, rand);
 
   CWalletTx wtx;
-  const std::string strError
-    = pwalletMain->SendMoneyToScript (nameScript, &txIn,
-                                      NAME_LOCKED_AMOUNT, wtx);
-
-  if (strError != "")
-    {
-      if (usedKey)
-        keyName.ReturnKey ();
-      throw JSONRPCError (RPC_WALLET_ERROR, strError);
-    }
+  SendMoneyToScript (nameScript, &txIn, NAME_LOCKED_AMOUNT, wtx);
 
   if (usedKey)
     keyName.KeepKey ();
@@ -909,16 +896,7 @@ name_update (const json_spirit::Array& params, bool fHelp)
     = CNameScript::buildNameUpdate (addrName, name, value);
 
   CWalletTx wtx;
-  const std::string strError
-    = pwalletMain->SendMoneyToScript (nameScript, &txIn,
-                                      NAME_LOCKED_AMOUNT, wtx);
-
-  if (strError != "")
-    {
-      if (usedKey)
-        keyName.ReturnKey ();
-      throw JSONRPCError (RPC_WALLET_ERROR, strError);
-    }
+  SendMoneyToScript (nameScript, &txIn, NAME_LOCKED_AMOUNT, wtx);
 
   if (usedKey)
     keyName.KeepKey ();

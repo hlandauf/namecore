@@ -1,5 +1,5 @@
 // Copyright (c) 2009-2010 Satoshi Nakamoto
-// Copyright (c) 2009-2014 The Bitcoin developers
+// Copyright (c) 2009-2014 The Bitcoin Core developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -8,8 +8,8 @@
 
 #include "amount.h"
 #include "auxpow.h"
-#include "core/block.h"
-#include "core/transaction.h"
+#include "primitives/block.h"
+#include "primitives/transaction.h"
 #include "crypter.h"
 #include "key.h"
 #include "keystore.h"
@@ -33,6 +33,7 @@
  * Settings
  */
 extern CFeeRate payTxFee;
+extern CAmount maxTxFee;
 extern unsigned int nTxConfirmTarget;
 extern bool bSpendZeroConfChange;
 extern bool fSendFreeTransactions;
@@ -42,6 +43,10 @@ extern bool fPayAtLeastCustomFee;
 static const CAmount DEFAULT_TRANSACTION_FEE = 0;
 //! -paytxfee will warn if called with a higher fee than this amount (in satoshis) per KB
 static const CAmount nHighTransactionFeeWarning = 0.01 * COIN;
+//! -maxtxfee default
+static const CAmount DEFAULT_TRANSACTION_MAXFEE = 0.1 * COIN;
+//! -maxtxfee will warn if called with a higher fee than this amount (in satoshis)
+static const CAmount nHighTransactionMaxFeeWarning = 100 * nHighTransactionFeeWarning;
 //! Largest (in bytes) free transaction we're willing to create
 static const unsigned int MAX_FREE_TRANSACTION_CREATE_SIZE = 1000;
 
@@ -292,8 +297,6 @@ public:
     bool CreateTransaction(CScript scriptPubKey, const CTxIn* withInput, const CAmount& nValue,
                            CWalletTx& wtxNew, CReserveKey& reservekey, CAmount& nFeeRet, std::string& strFailReason, const CCoinControl *coinControl = NULL);
     bool CommitTransaction(CWalletTx& wtxNew, CReserveKey& reservekey);
-    std::string SendMoney(const CTxDestination &address, CAmount nValue, CWalletTx& wtxNew);
-    std::string SendMoneyToScript(const CScript& scriptPubKey, const CTxIn* withInput, CAmount nValue, CWalletTx& wtxNew);
 
     static CFeeRate minTxFee;
     static CAmount GetMinimumFee(unsigned int nTxBytes, unsigned int nConfirmTarget, const CTxMemPool& pool);

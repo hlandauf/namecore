@@ -1,5 +1,5 @@
 // Copyright (c) 2011-2014 The Bitcoin Core developers
-// Distributed under the MIT/X11 software license, see the accompanying
+// Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 #include "main.h"
@@ -60,6 +60,7 @@ BOOST_AUTO_TEST_CASE(CreateNewBlock_validity)
     uint256 hash;
 
     LOCK(cs_main);
+    Checkpoints::fEnabled = false;
 
     // Simple block creation, nothing special yet:
     BOOST_CHECK(pblocktemplate = CreateNewBlock(scriptPubKey));
@@ -262,6 +263,7 @@ BOOST_AUTO_TEST_CASE(CreateNewBlock_validity)
     BOOST_FOREACH(CTransaction *tx, txFirst)
         delete tx;
 
+    Checkpoints::fEnabled = true;
 }
 #endif
 

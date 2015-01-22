@@ -1,5 +1,5 @@
 // Copyright (c) 2009-2010 Satoshi Nakamoto
-// Copyright (c) 2009-2014 The Bitcoin developers
+// Copyright (c) 2009-2014 The Bitcoin Core developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -582,7 +582,12 @@ public:
      */
     unsigned int GetSigOpCount(const CScript& scriptSig) const;
 
-    bool IsPayToScriptHash() const;
+    /**
+     * Check if the script is P2SH.  Optionally, strip a possible
+     * name prefix before performing the strict check from Bitcoin.
+     * @param allowName Strip name scripts before checking?
+     */
+    bool IsPayToScriptHash(bool allowNames) const;
 
     /** Called by IsStandardTx and P2SH/BIP62 VerifyScript (which makes it consensus-critical). */
     bool IsPushOnly() const;

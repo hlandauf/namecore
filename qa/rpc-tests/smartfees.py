@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python2
 # Copyright (c) 2014 The Bitcoin Core developers
 # Distributed under the MIT software license, see the accompanying
 # file COPYING or http://www.opensource.org/licenses/mit-license.php.
@@ -15,7 +15,8 @@ class EstimateFeeTest(BitcoinTestFramework):
 
     def getExtraArgs(self, n):
         args = BitcoinTestFramework.getExtraArgs(self, n)
-        args.extend(["-debug=mempool", "-debug=estimatefee"])
+        args.extend(["-debug=mempool", "-debug=estimatefee",
+                     "-relaypriority=0"])
 
         if n == 1:
             args.extend(["-blockprioritysize=1500", "-blockmaxsize=2000"])

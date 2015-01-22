@@ -57,7 +57,6 @@ def sync_mempools(rpc_connections):
         if num_match == len(rpc_connections):
             break
         time.sleep(1)
-        
 
 bitcoind_processes = {}
 
@@ -135,6 +134,15 @@ def initialize_chain(test_dir, extra_args = None):
         shutil.copytree(from_dir, to_dir)
         initialize_datadir(test_dir, i) # Overwrite port/rpcport in bitcoin.conf
 
+def initialize_chain_clean(test_dir, num_nodes):
+    """
+    Create an empty blockchain and num_nodes wallets.
+    Useful if a test case wants complete control over initialization.
+    """
+    for i in range(num_nodes):
+        datadir=initialize_datadir(test_dir, i)
+
+
 def _rpchost_to_args(rpchost):
     '''Convert optional IP:port spec to rpcconnect/rpcport args'''
     if rpchost is None:
@@ -155,12 +163,12 @@ def _rpchost_to_args(rpchost):
         rv += ['-rpcport=' + rpcport]
     return rv
 
-def start_node(i, dirname, extra_args=None, rpchost=None):
+def start_node(i, dirname, extra_args=[], rpchost=None):
     """
     Start a namecoind and return RPC connection to it
     """
     datadir = os.path.join(dirname, "node"+str(i))
-    args = [ os.getenv("NAMECOIND", "namecoind"), "-datadir="+datadir, "-keypool=1", "-discover=0" ]
+    args = [ os.getenv("NAMECOIND", "namecoind"), "-datadir="+datadir, "-keypool=1", "-discover=0", "-rest" ]
     args.extend(extra_args)
     bitcoind_processes[i] = subprocess.Popen(args)
     devnull = open("/dev/null", "w+")
@@ -226,11 +234,13 @@ def find_output(node, txid, amount):
             return i
     raise RuntimeError("find_output txid %s : %s not found"%(txid,str(amount)))
 
-def gather_inputs(from_node, amount_needed):
+
+def gather_inputs(from_node, amount_needed, confirmations_required=1):
     """
     Return a random set of unspent txouts that are enough to pay amount_needed
     """
-    utxo = from_node.listunspent(1)
+    assert(confirmations_required >=0)
+    utxo = from_node.listunspent(confirmations_required)
     random.shuffle(utxo)
     inputs = []
     total_in = Decimal("0.00000000")
@@ -322,3 +332,17 @@ def random_transaction(nodes, amount, min_fee, fee_increment, fee_variants):
 def assert_equal(thing1, thing2):
     if thing1 != thing2:
         raise AssertionError("%s != %s"%(str(thing1),str(thing2)))
+
+def assert_greater_than(thing1, thing2):
+    if thing1 <= thing2:
+        raise AssertionError("%s <= %s"%(str(thing1),str(thing2)))
+
+def assert_raises(exc, fun, *args, **kwds):
+    try:
+        fun(*args, **kwds)
+    except exc:
+        pass
+    except Exception as e:
+        raise AssertionError("Unexpected exception raised: "+type(e).__name__)
+    else:
+        raise AssertionError("No exception raised")

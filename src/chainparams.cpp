@@ -1,11 +1,11 @@
 // Copyright (c) 2010 Satoshi Nakamoto
-// Copyright (c) 2009-2014 The Bitcoin developers
+// Copyright (c) 2009-2014 The Bitcoin Core developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 #include "chainparams.h"
 
-#include "core/block.h"
+#include "primitives/block.h"
 #include "random.h"
 #include "util.h"
 #include "utilstrencodings.h"
@@ -15,7 +15,6 @@
 #include <boost/assign/list_of.hpp>
 
 using namespace std;
-using namespace boost::assign;
 
 struct SeedSpec6 {
     uint8_t addr[16];
@@ -76,20 +75,20 @@ static void convertSeed6(std::vector<CAddress> &vSeedsOut, const SeedSpec6 *data
  */
 static Checkpoints::MapCheckpoints mapCheckpoints =
         boost::assign::map_list_of
-        (  2016, uint256("0000000000660bad0d9fbde55ba7ee14ddf766ed5f527e3fbca523ac11460b92"))
-        (  4032, uint256("0000000000493b5696ad482deb79da835fe2385304b841beef1938655ddbc411"))
-        (  6048, uint256("000000000027939a2e1d8bb63f36c47da858e56d570f143e67e85068943470c9"))
-        (  8064, uint256("000000000003a01f708da7396e54d081701ea406ed163e519589717d8b7c95a5"))
-        ( 10080, uint256("00000000000fed3899f818b2228b4f01b9a0a7eeee907abd172852df71c64b06"))
-        ( 12096, uint256("0000000000006c06988ff361f124314f9f4bb45b6997d90a7ee4cedf434c670f"))
-        ( 14112, uint256("00000000000045d95e0588c47c17d593c7b5cb4fb1e56213d1b3843c1773df2b"))
-        ( 16128, uint256("000000000001d9964f9483f9096cf9d6c6c2886ed1e5dec95ad2aeec3ce72fa9"))
-        ( 18940, uint256("00000000000087f7fc0c8085217503ba86f796fa4984f7e5a08b6c4c12906c05"))
-        ( 30240, uint256("e1c8c862ff342358384d4c22fa6ea5f669f3e1cdcf34111f8017371c3c0be1da"))
-        ( 57000, uint256("aa3ec60168a0200799e362e2b572ee01f3c3852030d07d036e0aa884ec61f203"))
-        (112896, uint256("73f880e78a04dd6a31efc8abf7ca5db4e262c4ae130d559730d6ccb8808095bf"))
-        (182000, uint256("d47b4a8fd282f635d66ce34ebbeb26ffd64c35b41f286646598abfd813cba6d9"))
-        (193000, uint256("3b85e70ba7f5433049cfbcf0ae35ed869496dbedcd1c0fafadb0284ec81d7b58"))
+        (  2016, uint256S("0000000000660bad0d9fbde55ba7ee14ddf766ed5f527e3fbca523ac11460b92"))
+        (  4032, uint256S("0000000000493b5696ad482deb79da835fe2385304b841beef1938655ddbc411"))
+        (  6048, uint256S("000000000027939a2e1d8bb63f36c47da858e56d570f143e67e85068943470c9"))
+        (  8064, uint256S("000000000003a01f708da7396e54d081701ea406ed163e519589717d8b7c95a5"))
+        ( 10080, uint256S("00000000000fed3899f818b2228b4f01b9a0a7eeee907abd172852df71c64b06"))
+        ( 12096, uint256S("0000000000006c06988ff361f124314f9f4bb45b6997d90a7ee4cedf434c670f"))
+        ( 14112, uint256S("00000000000045d95e0588c47c17d593c7b5cb4fb1e56213d1b3843c1773df2b"))
+        ( 16128, uint256S("000000000001d9964f9483f9096cf9d6c6c2886ed1e5dec95ad2aeec3ce72fa9"))
+        ( 18940, uint256S("00000000000087f7fc0c8085217503ba86f796fa4984f7e5a08b6c4c12906c05"))
+        ( 30240, uint256S("e1c8c862ff342358384d4c22fa6ea5f669f3e1cdcf34111f8017371c3c0be1da"))
+        ( 57000, uint256S("aa3ec60168a0200799e362e2b572ee01f3c3852030d07d036e0aa884ec61f203"))
+        (112896, uint256S("73f880e78a04dd6a31efc8abf7ca5db4e262c4ae130d559730d6ccb8808095bf"))
+        (182000, uint256S("d47b4a8fd282f635d66ce34ebbeb26ffd64c35b41f286646598abfd813cba6d9"))
+        (193000, uint256S("3b85e70ba7f5433049cfbcf0ae35ed869496dbedcd1c0fafadb0284ec81d7b58"))
         ;
 static const Checkpoints::CCheckpointData data = {
         &mapCheckpoints,
@@ -101,17 +100,17 @@ static const Checkpoints::CCheckpointData data = {
 
 static Checkpoints::MapCheckpoints mapCheckpointsTestnet =
         boost::assign::map_list_of
-        (  2016, uint256("00000000b9e4132e1a803114bc88df3e49184a3c794c01a6eac334f12f4ccadb"))
-        (  4032, uint256("00000003fbc13a48b8de5c8742044c84b800edeabff8b39f7f23ac572c6d80ce"))
-        (  8064, uint256("f594a75db40244bc7baa808a695f796ba81cae5bb48fa920e367cdd31dbfb0e3"))
-        ( 10080, uint256("398d44a1a6e58dce3f7463217f677c2532e42a83696dcc5d4d97329c00a10891"))
-        ( 12096, uint256("22c9278493cda563565fc2a4250eff48bd68ed40cb5fb30029ca08ea6120ddab"))
-        ( 14112, uint256("83bade3e3d88845eb52de90311a8017b1cdf725b15d19bc89c47a568f7b4e08c"))
-        ( 16128, uint256("f456354835623f733bb928ed77d97ae06b96ad6c40aba63f51f94f06e905effc"))
-        ( 18144, uint256("c0ec570117822ca3c76abd1d10449b283d8ad39c64290d6abafe2bed23917886"))
-        ( 34715, uint256("0000000580cf4342f869e278d94d7e67d2ac8cae4a411082e0fd518a8091ebf2"))
-        ( 48384, uint256("00000001d528af69dce584f882e3bdb36127104988607b726591cc5e62287922"))
-        ( 60480, uint256("d3af823c32e890ca589dd4277aa4d27b8cd290396b7e0eeeee5121481fd43ca5"))
+        (  2016, uint256S("00000000b9e4132e1a803114bc88df3e49184a3c794c01a6eac334f12f4ccadb"))
+        (  4032, uint256S("00000003fbc13a48b8de5c8742044c84b800edeabff8b39f7f23ac572c6d80ce"))
+        (  8064, uint256S("f594a75db40244bc7baa808a695f796ba81cae5bb48fa920e367cdd31dbfb0e3"))
+        ( 10080, uint256S("398d44a1a6e58dce3f7463217f677c2532e42a83696dcc5d4d97329c00a10891"))
+        ( 12096, uint256S("22c9278493cda563565fc2a4250eff48bd68ed40cb5fb30029ca08ea6120ddab"))
+        ( 14112, uint256S("83bade3e3d88845eb52de90311a8017b1cdf725b15d19bc89c47a568f7b4e08c"))
+        ( 16128, uint256S("f456354835623f733bb928ed77d97ae06b96ad6c40aba63f51f94f06e905effc"))
+        ( 18144, uint256S("c0ec570117822ca3c76abd1d10449b283d8ad39c64290d6abafe2bed23917886"))
+        ( 34715, uint256S("0000000580cf4342f869e278d94d7e67d2ac8cae4a411082e0fd518a8091ebf2"))
+        ( 48384, uint256S("00000001d528af69dce584f882e3bdb36127104988607b726591cc5e62287922"))
+        ( 60480, uint256S("d3af823c32e890ca589dd4277aa4d27b8cd290396b7e0eeeee5121481fd43ca5"))
         ;
 static const Checkpoints::CCheckpointData dataTestnet = {
         &mapCheckpointsTestnet,
@@ -122,7 +121,7 @@ static const Checkpoints::CCheckpointData dataTestnet = {
 
 static Checkpoints::MapCheckpoints mapCheckpointsRegtest =
         boost::assign::map_list_of
-        ( 0, uint256("5287b3809b71433729402429b7d909a853cfac5ed40f09117b242c275e6b2d63"))
+        ( 0, uint256S("5287b3809b71433729402429b7d909a853cfac5ed40f09117b242c275e6b2d63"))
         ;
 static const Checkpoints::CCheckpointData dataRegtest = {
         &mapCheckpointsRegtest,
@@ -134,7 +133,6 @@ static const Checkpoints::CCheckpointData dataRegtest = {
 class CMainParams : public CChainParams {
 public:
     CMainParams() {
-        networkID = CBaseChainParams::MAIN;
         strNetworkID = "main";
         /** 
          * The message start string is designed to be unlikely to occur in normal data.
@@ -147,7 +145,7 @@ public:
         pchMessageStart[3] = 0xfe;
         vAlertPubKey = ParseHex("04ba207043c1575208f08ea6ac27ed2aedd4f84e70b874db129acb08e6109a3bbb7c479ae22565973ebf0ac0391514511a22cb9345bdb772be20cfbd38be578b0c");
         nDefaultPort = 8334;
-        bnProofOfWorkLimit = ~uint256(0) >> 32;
+        bnProofOfWorkLimit = ~arith_uint256(0) >> 32;
         nSubsidyHalvingInterval = 210000;
         nEnforceBlockUpgradeMajority = 750;
         nRejectBlockOutdatedMajority = 950;
@@ -174,7 +172,7 @@ public:
         txNew.vout[0].nValue = 50 * COIN;
         txNew.vout[0].scriptPubKey = CScript() << ParseHex("04b620369050cd899ffbbc4e8ee51e8c4534a855bb463439d63d235d4779685d8b6f4870a238cf365ac94fa13ef9a2a22cd99d0d5ee86dcabcafce36c7acf43ce5") << OP_CHECKSIG;
         genesis.vtx.push_back(txNew);
-        genesis.hashPrevBlock = 0;
+        genesis.hashPrevBlock.SetNull();
         genesis.hashMerkleRoot = genesis.BuildMerkleTree();
         genesis.nVersion.SetGenesisVersion(1);
         genesis.nTime    = 1303000001;
@@ -182,17 +180,17 @@ public:
         genesis.nNonce   = 0xa21ea192U;
 
         hashGenesisBlock = genesis.GetHash();
-        assert(hashGenesisBlock == uint256("0x000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770"));
-        assert(genesis.hashMerkleRoot == uint256("0x41c62dbd9068c89a449525e3cd5ac61b20ece28c3c38b3f35b2161f0e6d3cb0d"));
+        assert(hashGenesisBlock == uint256S("0x000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770"));
+        assert(genesis.hashMerkleRoot == uint256S("0x41c62dbd9068c89a449525e3cd5ac61b20ece28c3c38b3f35b2161f0e6d3cb0d"));
 
         /* FIXME: DNS seeds?  */
         //vSeeds.push_back(CDNSSeedData("bitcoin.sipa.be", "seed.bitcoin.sipa.be"));
 
-        base58Prefixes[PUBKEY_ADDRESS] = list_of(52);
-        base58Prefixes[SCRIPT_ADDRESS] = list_of(5); // FIXME: Update
-        base58Prefixes[SECRET_KEY] =     list_of(180);
-        //base58Prefixes[EXT_PUBLIC_KEY] = list_of(0x04)(0x88)(0xB2)(0x1E);
-        //base58Prefixes[EXT_SECRET_KEY] = list_of(0x04)(0x88)(0xAD)(0xE4);
+        base58Prefixes[PUBKEY_ADDRESS] = boost::assign::list_of(52);
+        base58Prefixes[SCRIPT_ADDRESS] = boost::assign::list_of(13);
+        base58Prefixes[SECRET_KEY] =     boost::assign::list_of(180);
+        //base58Prefixes[EXT_PUBLIC_KEY] = boost::assign::list_of(0x04)(0x88)(0xB2)(0x1E);
+        //base58Prefixes[EXT_SECRET_KEY] = boost::assign::list_of(0x04)(0x88)(0xAD)(0xE4);
 
         /* FIXME: fixed seeds?  */
         //convertSeed6(vFixedSeeds, pnSeed6_main, ARRAYLEN(pnSeed6_main));
@@ -212,12 +210,29 @@ public:
         /* These transactions have name outputs but a non-Namecoin tx version.
            They contain NAME_NEWs, which are fine, and also NAME_FIRSTUPDATE.
            The latter are not interpreted by namecoind, thus also ignore
-           them for us here.  *Just* NAME_NEW outputs are handled by
-           special "lenient version checks".  Below are only those transactions
-           that also have name registrations.  */
+           them for us here.  */
         addBug(98423, "bff3ed6873e5698b97bf0c28c29302b59588590b747787c7d1ef32decdabe0d1", BUG_FULLY_IGNORE);
         addBug(98424, "e9b211007e5cac471769212ca0f47bb066b81966a8e541d44acf0f8a1bd24976", BUG_FULLY_IGNORE);
         addBug(98425, "8aa2b0fc7d1033de28e0192526765a72e9df0c635f7305bdc57cb451ed01a4ca", BUG_FULLY_IGNORE);
+
+        /* These are non-Namecoin tx that contain just NAME_NEWs.  Those were
+           handled with a special rule previously, but now they are fully
+           disallowed and we handle the few exceptions here.  It is fine to
+           "ignore" them, as their outputs need no special Namecoin handling
+           before they are reused in a NAME_FIRSTUPDATE.  */
+        addBug(98318, "0ae5e958ff05ad8e273222656d98d076097def6d36f781a627c584b859f4727b", BUG_FULLY_IGNORE);
+        addBug(98321, "aca8ce46da1bbb9bb8e563880efcd9d6dd18342c446d6f0e3d4b964a990d1c27", BUG_FULLY_IGNORE);
+        addBug(98424, "c29b0d9d478411462a8ac29946bf6fdeca358a77b4be15cd921567eb66852180", BUG_FULLY_IGNORE);
+        addBug(98425, "221719b360f0c83fa5b1c26fb6b67c5e74e4e7c6aa3dce55025da6759f5f7060", BUG_FULLY_IGNORE);
+        addBug(193518, "597370b632efb35d5ed554c634c7af44affa6066f2a87a88046532d4057b46f8", BUG_FULLY_IGNORE);
+        addBug(195605, "0bb8c7807a9756aefe62c271770b313b31dee73151f515b1ac2066c50eaeeb91", BUG_FULLY_IGNORE);
+        addBug(195639, "3181930765b970fc43cd31d53fc6fc1da9439a28257d9067c3b5912d23eab01c", BUG_FULLY_IGNORE);
+        addBug(195639, "e815e7d774937d96a4b265ed4866b7e3dc8d9f2acb8563402e216aba6edd1e9e", BUG_FULLY_IGNORE);
+        addBug(195639, "cdfe6eda068e09fe760a70bec201feb041b8c660d0e98cbc05c8aa4106eae6ab", BUG_FULLY_IGNORE);
+        addBug(195641, "1e29e937b2a9e1f18af500371b8714157cf5ac7c95461913e08ce402de64ae75", BUG_FULLY_IGNORE);
+        addBug(195648, "d44ed6c0fac251931465f9123ada8459ec954cc6c7b648a56c9326ff7b13f552", BUG_FULLY_IGNORE);
+        addBug(197711, "dd77aea50a189935d0ef36a04856805cd74600a53193c539eb90c1e1c0f9ecac", BUG_FULLY_IGNORE);
+        addBug(204151, "f31875dfaf94bd3a93cfbed0e22d405d1f2e49b4d0750cb13812adc5e57f1e47", BUG_FULLY_IGNORE);
 
         /* This transaction has both a NAME_NEW and a NAME_FIRSTUPDATE as
            inputs.  This was accepted due to the "argument concatenation" bug.
@@ -265,10 +280,12 @@ public:
         return 36000;
     }
 
-    bool LenientVersionCheck(unsigned) const
+    CAmount MinNameCoinAmount(unsigned nHeight) const
     {
-        /* FIXME: Update after soft fork.  */
-        return true;
+        if (nHeight < 212500)
+            return 0;
+
+        return COIN / 100;
     }
 
     int DefaultCheckNameDB () const
@@ -284,20 +301,14 @@ static CMainParams mainParams;
 class CTestNetParams : public CMainParams {
 public:
     CTestNetParams() {
-        networkID = CBaseChainParams::TESTNET;
         strNetworkID = "test";
-        /** 
-         * The message start string is designed to be unlikely to occur in normal data.
-         * The characters are rarely used upper ASCII, not valid as UTF-8, and produce
-         * a large 4-byte int at any alignment.
-         */
         pchMessageStart[0] = 0xfa;
         pchMessageStart[1] = 0xbf;
         pchMessageStart[2] = 0xb5;
         pchMessageStart[3] = 0xfe;
         vAlertPubKey = ParseHex("04fc9702847840aaf195de8442ebecedf5b095cdbb9bc716bda9110971b28a49e0ead8564ff0db22209e0374782c093bb899692d524e9d6a6956e7c5ecbcd68284");
         nDefaultPort = 18334;
-        bnProofOfWorkLimit = ~uint256(0) >> 28;
+        bnProofOfWorkLimit = ~arith_uint256(0) >> 28;
         nEnforceBlockUpgradeMajority = 51;
         nRejectBlockOutdatedMajority = 75;
         nToCheckBlockUpgradeMajority = 100;
@@ -320,19 +331,19 @@ public:
         genesis.nNonce   = 0x16ec0bff;
 
         hashGenesisBlock = genesis.GetHash();
-        assert(hashGenesisBlock == uint256("00000007199508e34a9ff81e6ec0c477a4cccff2a4767a8eee39c11db367b008"));
-        assert(genesis.hashMerkleRoot == uint256("4a5e1e4baab89f3a32518a88c31bc87f618f76673e2cc77ab2127b7afdeda33b"));
+        assert(hashGenesisBlock == uint256S("00000007199508e34a9ff81e6ec0c477a4cccff2a4767a8eee39c11db367b008"));
+        assert(genesis.hashMerkleRoot == uint256S("4a5e1e4baab89f3a32518a88c31bc87f618f76673e2cc77ab2127b7afdeda33b"));
 
         vFixedSeeds.clear();
         vSeeds.clear();
         /* FIXME: DNS seeds?  */
         //vSeeds.push_back(CDNSSeedData("bitcoin.schildbach.de", "testnet-seed.bitcoin.schildbach.de"));
 
-        base58Prefixes[PUBKEY_ADDRESS] = list_of(111);
-        base58Prefixes[SCRIPT_ADDRESS] = list_of(196);
-        base58Prefixes[SECRET_KEY]     = list_of(239);
-        //base58Prefixes[EXT_PUBLIC_KEY] = list_of(0x04)(0x35)(0x87)(0xCF);
-        //base58Prefixes[EXT_SECRET_KEY] = list_of(0x04)(0x35)(0x83)(0x94);
+        base58Prefixes[PUBKEY_ADDRESS] = boost::assign::list_of(111);
+        base58Prefixes[SCRIPT_ADDRESS] = boost::assign::list_of(196);
+        base58Prefixes[SECRET_KEY]     = boost::assign::list_of(239);
+        //base58Prefixes[EXT_PUBLIC_KEY] = boost::assign::list_of(0x04)(0x35)(0x87)(0xCF);
+        //base58Prefixes[EXT_SECRET_KEY] = boost::assign::list_of(0x04)(0x35)(0x83)(0x94);
 
         /* FIXME: fixed seeds?  */
         //convertSeed6(vFixedSeeds, pnSeed6_test, ARRAYLEN(pnSeed6_test));
@@ -368,9 +379,9 @@ public:
         return true;
     }
 
-    bool LenientVersionCheck(unsigned) const
+    CAmount MinNameCoinAmount(unsigned) const
     {
-        return false;
+        return COIN / 100;
     }
 };
 static CTestNetParams testNetParams;
@@ -381,7 +392,6 @@ static CTestNetParams testNetParams;
 class CRegTestParams : public CTestNetParams {
 public:
     CRegTestParams() {
-        networkID = CBaseChainParams::REGTEST;
         strNetworkID = "regtest";
         pchMessageStart[0] = 0xfa;
         pchMessageStart[1] = 0xbf;
@@ -394,13 +404,13 @@ public:
         nMinerThreads = 1;
         nTargetTimespan = 14 * 24 * 60 * 60; //! two weeks
         nTargetSpacing = 10 * 60;
-        bnProofOfWorkLimit = ~uint256(0) >> 1;
+        bnProofOfWorkLimit = ~arith_uint256(0) >> 1;
         genesis.nTime = 1296688602;
         genesis.nBits = 0x207fffff;
         genesis.nNonce = 2;
         hashGenesisBlock = genesis.GetHash();
         nDefaultPort = 18444;
-        assert(hashGenesisBlock == uint256("0x0f9188f13cb7b2c71f2a335e3a4fc328bf5beb436012afca590b1a11466e2206"));
+        assert(hashGenesisBlock == uint256S("0x0f9188f13cb7b2c71f2a335e3a4fc328bf5beb436012afca590b1a11466e2206"));
 
         vFixedSeeds.clear(); //! Regtest mode doesn't have any fixed seeds.
         vSeeds.clear();  //! Regtest mode doesn't have any DNS seeds.
@@ -447,7 +457,6 @@ static CRegTestParams regTestParams;
 class CUnitTestParams : public CMainParams, public CModifiableParams {
 public:
     CUnitTestParams() {
-        networkID = CBaseChainParams::UNITTEST;
         strNetworkID = "unittest";
         nDefaultPort = 18445;
         vFixedSeeds.clear(); //! Unit test mode doesn't have any fixed seeds.
@@ -478,11 +487,6 @@ public:
         return true;
     }
 
-    bool LenientVersionCheck(unsigned) const
-    {
-        return false;
-    }
-
     //! Published setters to allow changing values in unit test cases
     virtual void setSubsidyHalvingInterval(int anSubsidyHalvingInterval)  { nSubsidyHalvingInterval=anSubsidyHalvingInterval; }
     virtual void setEnforceBlockUpgradeMajority(int anEnforceBlockUpgradeMajority)  { nEnforceBlockUpgradeMajority=anEnforceBlockUpgradeMajority; }
@@ -491,7 +495,7 @@ public:
     virtual void setDefaultCheckMemPool(bool afDefaultCheckMemPool)  { fDefaultCheckMemPool=afDefaultCheckMemPool; }
     virtual void setAllowMinDifficultyBlocks(bool afAllowMinDifficultyBlocks) {  fAllowMinDifficultyBlocks=afAllowMinDifficultyBlocks; }
     virtual void setSkipProofOfWorkCheck(bool afSkipProofOfWorkCheck) { fSkipProofOfWorkCheck = afSkipProofOfWorkCheck; }
-    virtual void setProofOfWorkLimit(const uint256& limit) { bnProofOfWorkLimit = limit; }
+    virtual void setProofOfWorkLimit(const arith_uint256& limit) { bnProofOfWorkLimit = limit; }
 };
 static CUnitTestParams unitTestParams;
 

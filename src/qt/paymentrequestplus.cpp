@@ -1,5 +1,5 @@
-// Copyright (c) 2011-2013 The Bitcoin developers
-// Distributed under the MIT/X11 software license, see the accompanying
+// Copyright (c) 2011-2014 The Bitcoin Core developers
+// Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 //
@@ -8,6 +8,8 @@
 //
 
 #include "paymentrequestplus.h"
+
+#include "util.h"
 
 #include <stdexcept>
 
@@ -150,7 +152,13 @@ bool PaymentRequestPlus::getMerchant(X509_STORE* certStore, QString& merchant) c
         int result = X509_verify_cert(store_ctx);
         if (result != 1) {
             int error = X509_STORE_CTX_get_error(store_ctx);
-            throw SSLVerifyError(X509_verify_cert_error_string(error));
+            // For testing payment requests, we allow self signed root certs!
+            // This option is just shown in the UI options, if -help-debug is enabled.
+            if (!(error == X509_V_ERR_DEPTH_ZERO_SELF_SIGNED_CERT && GetBoolArg("-allowselfsignedrootcertificates", false))) {
+                throw SSLVerifyError(X509_verify_cert_error_string(error));
+            } else {
+               qDebug() << "PaymentRequestPlus::getMerchant: Allowing self signed root certificate, because -allowselfsignedrootcertificates is true.";
+            }
         }
         X509_NAME *certname = X509_get_subject_name(signing_cert);
 
@@ -181,8 +189,7 @@ bool PaymentRequestPlus::getMerchant(X509_STORE* certStore, QString& merchant) c
         }
         // TODO: detect EV certificates and set merchant = business name instead of unfriendly NID_commonName ?
     }
-    catch (SSLVerifyError& err)
-    {
+    catch (const SSLVerifyError& err) {
         fResult = false;
         qWarning() << "PaymentRequestPlus::getMerchant : SSL error: " << err.what();
     }

@@ -1,5 +1,5 @@
 // Copyright (c) 2009-2010 Satoshi Nakamoto
-// Copyright (c) 2009-2014 The Bitcoin developers
+// Copyright (c) 2009-2014 The Bitcoin Core developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -10,8 +10,8 @@
 
 #include "amount.h"
 #include "coins.h"
-#include "core/transaction.h"
-#include "names.h"
+#include "primitives/transaction.h"
+#include "names/main.h"
 #include "sync.h"
 #include "script/names.h"
 
@@ -126,6 +126,11 @@ private:
 
     /** Name-related mempool data.  */
     CNameMemPool names;
+    /**
+     * Whether tx verification is turned off when checking mempool consistency.
+     * This is done for Namecoin unit tests.
+     */
+    bool fCheckInputs;
 
 public:
     mutable CCriticalSection cs;
@@ -143,10 +148,11 @@ public:
      * check does nothing.
      */
     void check(const CCoinsViewCache *pcoins) const;
-    void setSanityCheck(bool _fSanityCheck) { fSanityCheck = _fSanityCheck; }
+    void setSanityCheck(bool _fSanityCheck, bool _fCheckInputs = true) { fSanityCheck = _fSanityCheck; fCheckInputs = _fCheckInputs; }
 
     bool addUnchecked(const uint256& hash, const CTxMemPoolEntry &entry);
     void remove(const CTransaction &tx, std::list<CTransaction>& removed, bool fRecursive = false);
+    void removeCoinbaseSpends(const CCoinsViewCache *pcoins, unsigned int nMemPoolHeight);
     void removeConflicts(const CTransaction &tx, std::list<CTransaction>& removed);
     void removeForBlock(const std::vector<CTransaction>& vtx, unsigned int nBlockHeight,
                         std::list<CTransaction>& conflicts);

@@ -1,6 +1,6 @@
 // Copyright (c) 2009-2010 Satoshi Nakamoto
-// Copyright (c) 2009-2014 The Bitcoin developers
-// Distributed under the MIT/X11 software license, see the accompanying
+// Copyright (c) 2009-2014 The Bitcoin Core developers
+// Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 #if defined(HAVE_CONFIG_H)
@@ -12,7 +12,7 @@
 #include "addrman.h"
 #include "chainparams.h"
 #include "clientversion.h"
-#include "core/transaction.h"
+#include "primitives/transaction.h"
 #include "ui_interface.h"
 
 #ifdef WIN32
@@ -49,7 +49,6 @@
 #endif
 #endif
 
-using namespace boost;
 using namespace std;
 
 namespace {
@@ -156,56 +155,6 @@ CAddress GetLocalAddress(const CNetAddr *paddrPeer)
     ret.nServices = nLocalServices;
     ret.nTime = GetAdjustedTime();
     return ret;
-}
-
-bool RecvLine(SOCKET hSocket, string& strLine)
-{
-    strLine = "";
-    while (true)
-    {
-        char c;
-        int nBytes = recv(hSocket, &c, 1, 0);
-        if (nBytes > 0)
-        {
-            if (c == '\n')
-                continue;
-            if (c == '\r')
-                return true;
-            strLine += c;
-            if (strLine.size() >= 9000)
-                return true;
-        }
-        else if (nBytes <= 0)
-        {
-            boost::this_thread::interruption_point();
-            if (nBytes < 0)
-            {
-                int nErr = WSAGetLastError();
-                if (nErr == WSAEMSGSIZE)
-                    continue;
-                if (nErr == WSAEWOULDBLOCK || nErr == WSAEINTR || nErr == WSAEINPROGRESS)
-                {
-                    MilliSleep(10);
-                    continue;
-                }
-            }
-            if (!strLine.empty())
-                return true;
-            if (nBytes == 0)
-            {
-                // socket closed
-                LogPrint("net", "socket closed\n");
-                return false;
-            }
-            else
-            {
-                // socket error
-                int nErr = WSAGetLastError();
-                LogPrint("net", "recv failed: %s\n", NetworkErrorString(nErr));
-                return false;
-            }
-        }
-    }
 }
 
 int GetnScore(const CService& addr)
@@ -399,7 +348,9 @@ CNode* ConnectNode(CAddress addrConnect, const char *pszDest)
 
     // Connect
     SOCKET hSocket;
-    if (pszDest ? ConnectSocketByName(addrConnect, hSocket, pszDest, Params().GetDefaultPort()) : ConnectSocket(addrConnect, hSocket))
+    bool proxyConnectionFailed = false;
+    if (pszDest ? ConnectSocketByName(addrConnect, hSocket, pszDest, Params().GetDefaultPort(), nConnectTimeout, &proxyConnectionFailed) :
+                  ConnectSocket(addrConnect, hSocket, nConnectTimeout, &proxyConnectionFailed))
     {
         addrman.Attempt(addrConnect);
 
@@ -415,6 +366,10 @@ CNode* ConnectNode(CAddress addrConnect, const char *pszDest)
         pnode->nTimeConnected = GetTime();
 
         return pnode;
+    } else if (!proxyConnectionFailed) {
+        // If connecting to the node failed, and failure is not caused by a problem connecting to
+        // the proxy, mark this as an attempt.
+        addrman.Attempt(addrConnect);
     }
 
     return NULL;
@@ -439,7 +394,6 @@ void CNode::PushVersion()
 {
     int nBestHeight = g_signals.GetHeight().get_value_or(0);
 
-    /// when NTP implemented, change to just nTime = GetAdjustedTime()
     int64_t nTime = (fInbound ? GetAdjustedTime() : GetTime());
     CAddress addrYou = (addr.IsRoutable() && !IsProxy(addr) ? addr : CAddress(CService("0.0.0.0",0)));
     CAddress addrMe = GetLocalAddress(&addr);
@@ -517,6 +471,7 @@ void CNode::copyStats(CNodeStats &stats)
     X(nLastSend);
     X(nLastRecv);
     X(nTimeConnected);
+    X(nTimeOffset);
     X(addrName);
     X(nVersion);
     X(cleanSubVer);
@@ -595,7 +550,7 @@ int CNetMessage::readHeader(const char *pch, unsigned int nBytes)
     try {
         hdrbuf >> hdr;
     }
-    catch (const std::exception &) {
+    catch (const std::exception&) {
         return -1;
     }
 
@@ -1062,7 +1017,7 @@ void ThreadMapPort()
                 MilliSleep(20*60*1000); // Refresh every 20 minutes
             }
         }
-        catch (boost::thread_interrupted)
+        catch (const boost::thread_interrupted&)
         {
             r = UPNP_DeletePortMapping(urls.controlURL, data.first.servicetype, port.c_str(), "TCP", 0);
             LogPrintf("UPNP_DeletePortMapping() returned : %d\n", r);
@@ -1559,7 +1514,7 @@ void static Discover(boost::thread_group& threadGroup)
 
 #ifdef WIN32
     // Get local host IP
-    char pszHostName[1000] = "";
+    char pszHostName[256] = "";
     if (gethostname(pszHostName, sizeof(pszHostName)) != SOCKET_ERROR)
     {
         vector<CNetAddr> vaddr;
@@ -1567,7 +1522,8 @@ void static Discover(boost::thread_group& threadGroup)
         {
             BOOST_FOREACH (const CNetAddr &addr, vaddr)
             {
-                AddLocal(addr, LOCAL_IF);
+                if (AddLocal(addr, LOCAL_IF))
+                    LogPrintf("%s: %s - %s\n", __func__, pszHostName, addr.ToString());
             }
         }
     }
@@ -1587,20 +1543,19 @@ void static Discover(boost::thread_group& threadGroup)
                 struct sockaddr_in* s4 = (struct sockaddr_in*)(ifa->ifa_addr);
                 CNetAddr addr(s4->sin_addr);
                 if (AddLocal(addr, LOCAL_IF))
-                    LogPrintf("IPv4 %s: %s\n", ifa->ifa_name, addr.ToString());
+                    LogPrintf("%s: IPv4 %s: %s\n", __func__, ifa->ifa_name, addr.ToString());
             }
             else if (ifa->ifa_addr->sa_family == AF_INET6)
             {
                 struct sockaddr_in6* s6 = (struct sockaddr_in6*)(ifa->ifa_addr);
                 CNetAddr addr(s6->sin6_addr);
                 if (AddLocal(addr, LOCAL_IF))
-                    LogPrintf("IPv6 %s: %s\n", ifa->ifa_name, addr.ToString());
+                    LogPrintf("%s: IPv6 %s: %s\n", __func__, ifa->ifa_name, addr.ToString());
             }
         }
         freeifaddrs(myaddrs);
     }
 #endif
-
 }
 
 void StartNode(boost::thread_group& threadGroup)
@@ -1848,7 +1803,7 @@ bool CAddrDB::Write(const CAddrMan& addr)
     try {
         fileout << ssPeers;
     }
-    catch (std::exception &e) {
+    catch (const std::exception& e) {
         return error("%s : Serialize or I/O error - %s", __func__, e.what());
     }
     FileCommit(fileout.Get());
@@ -1884,7 +1839,7 @@ bool CAddrDB::Read(CAddrMan& addr)
         filein.read((char *)&vchData[0], dataSize);
         filein >> hashIn;
     }
-    catch (std::exception &e) {
+    catch (const std::exception& e) {
         return error("%s : Deserialize or I/O error - %s", __func__, e.what());
     }
     filein.fclose();
@@ -1908,7 +1863,7 @@ bool CAddrDB::Read(CAddrMan& addr)
         // de-serialize address data into one CAddrMan object
         ssPeers >> addr;
     }
-    catch (std::exception &e) {
+    catch (const std::exception& e) {
         return error("%s : Deserialize or I/O error - %s", __func__, e.what());
     }
 
@@ -1928,6 +1883,7 @@ CNode::CNode(SOCKET hSocketIn, CAddress addrIn, std::string addrNameIn, bool fIn
     nSendBytes = 0;
     nRecvBytes = 0;
     nTimeConnected = GetTime();
+    nTimeOffset = 0;
     addr = addrIn;
     addrName = addrNameIn == "" ? addr.ToStringIPPort() : addrNameIn;
     nVersion = 0;
@@ -1942,7 +1898,7 @@ CNode::CNode(SOCKET hSocketIn, CAddress addrIn, std::string addrNameIn, bool fIn
     nRefCount = 0;
     nSendSize = 0;
     nSendOffset = 0;
-    hashContinue = 0;
+    hashContinue = uint256();
     nStartingHeight = -1;
     fGetAddr = false;
     fRelayTxes = false;

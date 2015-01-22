@@ -12,6 +12,8 @@
 
 #include <boost/test/unit_test.hpp>
 
+class CNameCache;
+
 namespace
 {
 class CCoinsViewTest : public CCoinsView

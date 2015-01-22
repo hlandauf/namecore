@@ -1,5 +1,5 @@
 // Copyright (c) 2010 Satoshi Nakamoto
-// Copyright (c) 2009-2014 The Bitcoin developers
+// Copyright (c) 2009-2014 The Bitcoin Core developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -88,7 +88,7 @@ Value GetNetworkHashPS(int lookup, int height) {
     if (minTime == maxTime)
         return 0;
 
-    uint256 workDiff = pb->nChainWork - pb0->nChainWork;
+    arith_uint256 workDiff = pb->nChainWork - pb0->nChainWork;
     int64_t timeDiff = maxTime - minTime;
 
     return (int64_t)(workDiff.getdouble() / timeDiff);
@@ -290,6 +290,7 @@ Value getmininginfo(const Array& params, bool fHelp)
 }
 
 
+// NOTE: Unlike wallet RPC (which use BTC values), mining RPCs follow GBT (BIP 22) in using satoshi amounts
 Value prioritisetransaction(const Array& params, bool fHelp)
 {
     if (fHelp || params.size() != 3)
@@ -301,27 +302,43 @@ Value prioritisetransaction(const Array& params, bool fHelp)
             "2. priority delta (numeric, required) The priority to add or subtract.\n"
             "                  The transaction selection algorithm considers the tx as it would have a higher priority.\n"
             "                  (priority of a transaction is calculated: coinage * value_in_satoshis / txsize) \n"
-            "3. fee delta      (numeric, required) The absolute fee value to add or subtract in bitcoin.\n"
+            "3. fee delta      (numeric, required) The fee value (in satoshis) to add (or subtract, if negative).\n"
             "                  The fee is not actually paid, only the algorithm for selecting transactions into a block\n"
             "                  considers the transaction as it would have paid a higher (or lower) fee.\n"
             "\nResult\n"
             "true              (boolean) Returns true\n"
             "\nExamples:\n"
-            + HelpExampleCli("prioritisetransaction", "\"txid\" 0.0 0.00010000")
-            + HelpExampleRpc("prioritisetransaction", "\"txid\", 0.0, 0.00010000")
+            + HelpExampleCli("prioritisetransaction", "\"txid\" 0.0 10000")
+            + HelpExampleRpc("prioritisetransaction", "\"txid\", 0.0, 10000")
         );
 
-    uint256 hash;
-    hash.SetHex(params[0].get_str());
+    uint256 hash = ParseHashStr(params[0].get_str(), "txid");
 
-    CAmount nAmount = 0;
-    if (params[2].get_real() != 0.0)
-        nAmount = AmountFromValue(params[2]);
+    CAmount nAmount = params[2].get_int64();
 
     mempool.PrioritiseTransaction(hash, params[0].get_str(), params[1].get_real(), nAmount);
     return true;
 }
 
+
+// NOTE: Assumes a conclusive result; if result is inconclusive, it must be handled by caller
+static Value BIP22ValidationResult(const CValidationState& state)
+{
+    if (state.IsValid())
+        return Value::null;
+
+    std::string strRejectReason = state.GetRejectReason();
+    if (state.IsError())
+        throw JSONRPCError(RPC_VERIFY_ERROR, strRejectReason);
+    if (state.IsInvalid())
+    {
+        if (strRejectReason.empty())
+            return "rejected";
+        return strRejectReason;
+    }
+    // Should be impossible
+    return "valid?";
+}
 
 Value getblocktemplate(const Array& params, bool fHelp)
 {
@@ -400,6 +417,36 @@ Value getblocktemplate(const Array& params, bool fHelp)
         else
             throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid mode");
         lpval = find_value(oparam, "longpollid");
+
+        if (strMode == "proposal")
+        {
+            const Value& dataval = find_value(oparam, "data");
+            if (dataval.type() != str_type)
+                throw JSONRPCError(RPC_TYPE_ERROR, "Missing data String key for proposal");
+
+            CBlock block;
+            if (!DecodeHexBlk(block, dataval.get_str()))
+                throw JSONRPCError(RPC_DESERIALIZATION_ERROR, "Block decode failed");
+
+            uint256 hash = block.GetHash();
+            BlockMap::iterator mi = mapBlockIndex.find(hash);
+            if (mi != mapBlockIndex.end()) {
+                CBlockIndex *pindex = mi->second;
+                if (pindex->IsValid(BLOCK_VALID_SCRIPTS))
+                    return "duplicate";
+                if (pindex->nStatus & BLOCK_FAILED_MASK)
+                    return "duplicate-invalid";
+                return "duplicate-inconclusive";
+            }
+
+            CBlockIndex* const pindexPrev = chainActive.Tip();
+            // TestBlockValidity only supports blocks built on the current Tip
+            if (block.hashPrevBlock != pindexPrev->GetBlockHash())
+                return "inconclusive-not-best-prevblk";
+            CValidationState state;
+            TestBlockValidity(state, block, pindexPrev, false, true);
+            return BIP22ValidationResult(state);
+        }
     }
 
     if (strMode != "template")
@@ -502,6 +549,8 @@ Value getblocktemplate(const Array& params, bool fHelp)
     UpdateTime(pblock, pindexPrev);
     pblock->nNonce = 0;
 
+    static const Array aCaps = boost::assign::list_of("proposal");
+
     Array transactions;
     map<uint256, int64_t> setTxIndex;
     int i = 0;
@@ -537,7 +586,7 @@ Value getblocktemplate(const Array& params, bool fHelp)
     Object aux;
     aux.push_back(Pair("flags", HexStr(COINBASE_FLAGS.begin(), COINBASE_FLAGS.end())));
 
-    uint256 hashTarget = uint256().SetCompact(pblock->nBits);
+    arith_uint256 hashTarget = arith_uint256().SetCompact(pblock->nBits);
 
     static Array aMutable;
     if (aMutable.empty())
@@ -548,6 +597,7 @@ Value getblocktemplate(const Array& params, bool fHelp)
     }
 
     Object result;
+    result.push_back(Pair("capabilities", aCaps));
     result.push_back(Pair("version", pblock->nVersion.GetFullVersion()));
     result.push_back(Pair("previousblockhash", pblock->hashPrevBlock.GetHex()));
     result.push_back(Pair("transactions", transactions));
@@ -606,41 +656,39 @@ Value submitblock(const Array& params, bool fHelp)
             + HelpExampleRpc("submitblock", "\"mydata\"")
         );
 
-    vector<unsigned char> blockData(ParseHex(params[0].get_str()));
-    CDataStream ssBlock(blockData, SER_NETWORK, PROTOCOL_VERSION);
-    CBlock pblock;
-    try {
-        ssBlock >> pblock;
-    }
-    catch (const std::exception &) {
+    CBlock block;
+    if (!DecodeHexBlk(block, params[0].get_str()))
         throw JSONRPCError(RPC_DESERIALIZATION_ERROR, "Block decode failed");
+
+    uint256 hash = block.GetHash();
+    BlockMap::iterator mi = mapBlockIndex.find(hash);
+    if (mi != mapBlockIndex.end()) {
+        CBlockIndex *pindex = mi->second;
+        if (pindex->IsValid(BLOCK_VALID_SCRIPTS))
+            return "duplicate";
+        if (pindex->nStatus & BLOCK_FAILED_MASK)
+            return "duplicate-invalid";
+        // Otherwise, we might only have the header - process the block before returning
     }
 
     CValidationState state;
-    submitblock_StateCatcher sc(pblock.GetHash());
+    submitblock_StateCatcher sc(block.GetHash());
     RegisterValidationInterface(&sc);
-    bool fAccepted = ProcessNewBlock(state, NULL, &pblock);
+    bool fAccepted = ProcessNewBlock(state, NULL, &block);
     UnregisterValidationInterface(&sc);
+    if (mi != mapBlockIndex.end())
+    {
+        if (fAccepted && !sc.found)
+            return "duplicate-inconclusive";
+        return "duplicate";
+    }
     if (fAccepted)
     {
         if (!sc.found)
             return "inconclusive";
         state = sc.state;
     }
-    if (state.IsError())
-    {
-        std::string strRejectReason = state.GetRejectReason();
-        throw JSONRPCError(RPC_VERIFY_ERROR, strRejectReason);
-    }
-    if (state.IsInvalid())
-    {
-        std::string strRejectReason = state.GetRejectReason();
-        if (strRejectReason.empty())
-            return "rejected";
-        return strRejectReason;
-    }
-
-    return Value::null;
+    return BIP22ValidationResult(state);
 }
 
 Value estimatefee(const Array& params, bool fHelp)
@@ -649,7 +697,7 @@ Value estimatefee(const Array& params, bool fHelp)
         throw runtime_error(
             "estimatefee nblocks\n"
             "\nEstimates the approximate fee per kilobyte\n"
-            "needed for a transaction to get confirmed\n"
+            "needed for a transaction to begin confirmation\n"
             "within nblocks blocks.\n"
             "\nArguments:\n"
             "1. nblocks     (numeric)\n"
@@ -681,7 +729,7 @@ Value estimatepriority(const Array& params, bool fHelp)
         throw runtime_error(
             "estimatepriority nblocks\n"
             "\nEstimates the approximate priority\n"
-            "a zero-fee transaction needs to get confirmed\n"
+            "a zero-fee transaction needs to begin confirmation\n"
             "within nblocks blocks.\n"
             "\nArguments:\n"
             "1. nblocks     (numeric)\n"
@@ -737,11 +785,11 @@ Value getauxblock(const Array& params, bool fHelp)
             + HelpExampleRpc("getauxblock", "")
             );
 
-    if (vNodes.empty())
+    if (vNodes.empty() && !Params().MineBlocksOnDemand())
         throw JSONRPCError(RPC_CLIENT_NOT_CONNECTED,
                            "Namecoin is not connected!");
 
-    if (IsInitialBlockDownload())
+    if (IsInitialBlockDownload() && !Params().MineBlocksOnDemand())
         throw JSONRPCError(RPC_CLIENT_IN_INITIAL_DOWNLOAD,
                            "Namecoin is downloading blocks...");
     
@@ -797,7 +845,7 @@ Value getauxblock(const Array& params, bool fHelp)
 
         const CBlock& block = pblocktemplate->block;
 
-        uint256 target;
+        arith_uint256 target;
         bool fNegative, fOverflow;
         target.SetCompact(block.nBits, &fNegative, &fOverflow);
         if (fNegative || fOverflow || target == 0)

@@ -1,10 +1,12 @@
-// Copyright (c) 2009-2014 The Bitcoin developers
+// Copyright (c) 2009-2014 The Bitcoin Core developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 #include "key.h"
 
-#include "crypto/sha2.h"
+#include "arith_uint256.h"
+#include "crypto/hmac_sha512.h"
+#include "crypto/rfc6979_hmac_sha256.h"
 #include "eccryptoverify.h"
 #include "pubkey.h"
 #include "random.h"
@@ -33,6 +35,7 @@ bool CKey::Check(const unsigned char *vch) {
 }
 
 void CKey::MakeNewKey(bool fCompressedIn) {
+    RandAddSeedPerfmon();
     do {
         GetRandBytes(vch, sizeof(vch));
     } while (!Check(vch));
@@ -71,19 +74,37 @@ CPubKey CKey::GetPubKey() const {
     return result;
 }
 
-bool CKey::Sign(const uint256 &hash, std::vector<unsigned char>& vchSig) const {
+bool CKey::Sign(const uint256 &hash, std::vector<unsigned char>& vchSig, uint32_t test_case) const {
     if (!fValid)
         return false;
     vchSig.resize(72);
-    int nSigLen = 72;
-    CKey nonce;
+    RFC6979_HMAC_SHA256 prng(begin(), 32, (unsigned char*)&hash, 32);
     do {
-        nonce.MakeNewKey(true);
-        if (secp256k1_ecdsa_sign((const unsigned char*)&hash, 32, (unsigned char*)&vchSig[0], &nSigLen, begin(), nonce.begin()))
-            break;
+        uint256 nonce;
+        prng.Generate((unsigned char*)&nonce, 32);
+        nonce = ArithToUint256(UintToArith256(nonce) + test_case);
+        int nSigLen = 72;
+        int ret = secp256k1_ecdsa_sign((const unsigned char*)&hash, (unsigned char*)&vchSig[0], &nSigLen, begin(), (unsigned char*)&nonce);
+        nonce = uint256();
+        if (ret) {
+            vchSig.resize(nSigLen);
+            return true;
+        }
     } while(true);
-    vchSig.resize(nSigLen);
-    return true;
+}
+
+bool CKey::VerifyPubKey(const CPubKey& pubkey) const {
+    if (pubkey.IsCompressed() != fCompressed) {
+        return false;
+    }
+    unsigned char rnd[8];
+    std::string str = "Bitcoin key verification\n";
+    GetRandBytes(rnd, sizeof(rnd));
+    uint256 hash;
+    CHash256().Write((unsigned char*)str.data(), str.size()).Write(rnd, sizeof(rnd)).Finalize((unsigned char*)&hash);
+    std::vector<unsigned char> vchSig;
+    Sign(hash, vchSig);
+    return pubkey.Verify(hash, vchSig);
 }
 
 bool CKey::SignCompact(const uint256 &hash, std::vector<unsigned char>& vchSig) const {
@@ -91,10 +112,13 @@ bool CKey::SignCompact(const uint256 &hash, std::vector<unsigned char>& vchSig) 
         return false;
     vchSig.resize(65);
     int rec = -1;
-    CKey nonce;
+    RFC6979_HMAC_SHA256 prng(begin(), 32, (unsigned char*)&hash, 32);
     do {
-        nonce.MakeNewKey(true);
-        if (secp256k1_ecdsa_sign_compact((const unsigned char*)&hash, 32, &vchSig[1], begin(), nonce.begin(), &rec))
+        uint256 nonce;
+        prng.Generate((unsigned char*)&nonce, 32);
+        int ret = secp256k1_ecdsa_sign_compact((const unsigned char*)&hash, &vchSig[1], begin(), (unsigned char*)&nonce, &rec);
+        nonce = uint256();
+        if (ret)
             break;
     } while(true);
     assert(rec != -1);
@@ -111,10 +135,7 @@ bool CKey::Load(CPrivKey &privkey, CPubKey &vchPubKey, bool fSkipCheck=false) {
     if (fSkipCheck)
         return true;
 
-    if (GetPubKey() != vchPubKey)
-        return false;
-
-    return true;
+    return VerifyPubKey(vchPubKey);
 }
 
 bool CKey::Derive(CKey& keyChild, unsigned char ccChild[32], unsigned int nChild, const unsigned char cc[32]) const {
@@ -190,5 +211,13 @@ void CExtKey::Decode(const unsigned char code[74]) {
 }
 
 bool ECC_InitSanityCheck() {
-    return CECKey::SanityCheck();
+#if !defined(USE_SECP256K1)
+    if (!CECKey::SanityCheck()) {
+        return false;
+    }
+#endif
+    CKey key;
+    key.MakeNewKey(true);
+    CPubKey pubkey = key.GetPubKey();
+    return key.VerifyPubKey(pubkey);
 }

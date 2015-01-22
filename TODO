@@ -1,14 +1,4 @@
-* soft fork in namecoind:
-  + prevent "name_new stealing" in memory pool
-  + enforce nametx-version also for name *outputs*
-  + disallow auxpow parent blocks with auxpow
-  + limit DB locks / unique tx
-  - disallow greedy names
-  - update fee logic?
-
 * handle seed nodes / DNS seeds
-
-* decide about exact P2SH behaviour, implement it, add regtests for names
 
 * upgrade to new version at fixed height:
   - blocks version=2 via majority rule soft fork (BIP34)
@@ -18,6 +8,7 @@
   - no need to disallow auxpow parent blocks with auxpow-flag in the version
     any more; instead, the auxpow is simply never loaded for them
   - name_new format change?
+  - make NamecoinTxVersion a flag?
   - more differences???
 
 * reenable some of the disabled tests, new alert keys?

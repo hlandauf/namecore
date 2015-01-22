@@ -1,5 +1,5 @@
 // Copyright (c) 2010 Satoshi Nakamoto
-// Copyright (c) 2009-2014 The Bitcoin developers
+// Copyright (c) 2009-2014 The Bitcoin Core developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -8,6 +8,7 @@
 
 #include "amount.h"
 #include "rpcprotocol.h"
+#include "script/script.h"
 #include "uint256.h"
 
 #include <list>
@@ -21,7 +22,10 @@
 
 class CBlockIndex;
 class CMutableTransaction;
+class CNameData;
 class CNetAddr;
+class CTxIn;
+class CWalletTx;
 
 class AcceptedConnection
 {
@@ -53,6 +57,9 @@ bool IsRPCRunning();
 void SetRPCWarmupStatus(const std::string& newStatus);
 /* Mark warmup as done.  RPC calls will be processed from now on.  */
 void SetRPCWarmupFinished();
+
+/* returns the current warmup state.  */
+bool RPCIsInWarmup(std::string *statusOut);
 
 /**
  * Type-check arguments; throws JSONRPCError if wrong type given. Does not check that
@@ -199,6 +206,8 @@ extern json_spirit::Value getblockchaininfo(const json_spirit::Array& params, bo
 extern json_spirit::Value getnetworkinfo(const json_spirit::Array& params, bool fHelp);
 extern json_spirit::Value setmocktime(const json_spirit::Array& params, bool fHelp);
 
+extern void SendMoneyToScript(const CScript& scriptPubKey, const CTxIn* withInput, CAmount nValue, CWalletTx& wtxNew);
+
 extern json_spirit::Value getrawtransaction(const json_spirit::Array& params, bool fHelp); // in rcprawtransaction.cpp
 extern json_spirit::Value listunspent(const json_spirit::Array& params, bool fHelp);
 extern json_spirit::Value lockunspent(const json_spirit::Array& params, bool fHelp);
@@ -221,16 +230,19 @@ extern json_spirit::Value gettxoutsetinfo(const json_spirit::Array& params, bool
 extern json_spirit::Value gettxout(const json_spirit::Array& params, bool fHelp);
 extern json_spirit::Value verifychain(const json_spirit::Array& params, bool fHelp);
 extern json_spirit::Value getchaintips(const json_spirit::Array& params, bool fHelp);
+extern json_spirit::Value invalidateblock(const json_spirit::Array& params, bool fHelp);
+extern json_spirit::Value reconsiderblock(const json_spirit::Array& params, bool fHelp);
 
 // in rest.cpp
 extern bool HTTPReq_REST(AcceptedConnection *conn,
-                  std::string& strURI,
-                  std::map<std::string, std::string>& mapHeaders,
+                  const std::string& strURI,
+                  const std::map<std::string, std::string>& mapHeaders,
                   bool fRun);
 
 /* In rpcnames.cpp.  */
 
 extern void AddRawTxNameOperation(CMutableTransaction& tx, const json_spirit::Object& obj);
+extern json_spirit::Object getNameInfo(const valtype& name, const CNameData& data);
 
 extern json_spirit::Value name_show(const json_spirit::Array& params, bool fHelp);
 extern json_spirit::Value name_history(const json_spirit::Array& params, bool fHelp);

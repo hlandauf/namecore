@@ -1,10 +1,11 @@
 // Copyright (c) 2009-2010 Satoshi Nakamoto
-// Copyright (c) 2009-2014 The Bitcoin developers
+// Copyright (c) 2009-2014 The Bitcoin Core developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 #include "script.h"
 
+#include "script/names.h"
 #include "tinyformat.h"
 #include "utilstrencodings.h"
 
@@ -189,7 +190,7 @@ unsigned int CScript::GetSigOpCount(bool fAccurate) const
 
 unsigned int CScript::GetSigOpCount(const CScript& scriptSig) const
 {
-    if (!IsPayToScriptHash())
+    if (!IsPayToScriptHash(true))
         return GetSigOpCount(true);
 
     // This is a pay-to-script-hash scriptPubKey;
@@ -211,13 +212,18 @@ unsigned int CScript::GetSigOpCount(const CScript& scriptSig) const
     return subscript.GetSigOpCount(true);
 }
 
-bool CScript::IsPayToScriptHash() const
+bool CScript::IsPayToScriptHash(bool allowNames) const
 {
     // Extra-fast test for pay-to-script-hash CScripts:
-    return (this->size() == 23 &&
-            this->at(0) == OP_HASH160 &&
-            this->at(1) == 0x14 &&
-            this->at(22) == OP_EQUAL);
+    if (!allowNames)
+        return (this->size() == 23 &&
+                this->at(0) == OP_HASH160 &&
+                this->at(1) == 0x14 &&
+                this->at(22) == OP_EQUAL);
+
+    // Strip off a name prefix if present.
+    const CNameScript nameOp(*this);
+    return nameOp.getAddress().IsPayToScriptHash(false);
 }
 
 bool CScript::IsPushOnly() const
